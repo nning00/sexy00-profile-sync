@@ -189,15 +189,17 @@ if (process.env.PROFILE_SYNC_ENDPOINT && process.env.PROFILE_SYNC_SECRET) {
   for (let index = 0; index < profiles.length; index += batchSize) {
     chunks.push(profiles.slice(index, index + batchSize));
   }
-  const totals = { create: 0, update: 0, unchanged: 0, pendingReview: 0, skippedCity: 0, errors: 0 };
+  const totals = { create: 0, update: 0, unchanged: 0, pendingReview: 0, skippedCity: 0, warnings: 0, errors: 0 };
   for (const [index, chunk] of chunks.entries()) {
     let response;
     let terminalHttpError = "";
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       try {
         response = await postPayload({ mode: commit ? "commit" : "preview", capturedAt, deferRevalidation: true, profiles: chunk });
-        if (!response?.result?.errors?.length) break;
-        console.error(`批次 ${index + 1}/${chunks.length} 第 ${attempt} 次嘗試失敗：${JSON.stringify(response.result.errors)}`);
+        const attemptErrors = response?.result?.errors || [];
+        const blockingErrors = attemptErrors.filter((item) => item?.message !== "image-download-404");
+        if (!blockingErrors.length) break;
+        console.error(`批次 ${index + 1}/${chunks.length} 第 ${attempt} 次嘗試失敗：${JSON.stringify(blockingErrors)}`);
       } catch (error) {
         terminalHttpError = errorMessage(error);
         console.error(`批次 ${index + 1}/${chunks.length} 第 ${attempt} 次 HTTP 嘗試失敗：${terminalHttpError}`);
@@ -211,10 +213,17 @@ if (process.env.PROFILE_SYNC_ENDPOINT && process.env.PROFILE_SYNC_SECRET) {
       continue;
     }
     for (const key of ["create", "update", "unchanged", "pendingReview", "skippedCity"]) totals[key] += response?.summary?.[key] || 0;
-    totals.errors += response?.result?.errors?.length || 0;
+    const responseErrors = response?.result?.errors || [];
+    const warningErrors = responseErrors.filter((item) => item?.message === "image-download-404");
+    const blockingErrors = responseErrors.filter((item) => item?.message !== "image-download-404");
+    totals.warnings += warningErrors.length;
+    totals.errors += blockingErrors.length;
     console.log(`批次 ${index + 1}/${chunks.length}：${JSON.stringify(response?.summary || response)}`);
-    if (response?.result?.errors?.length) {
-      console.error(`批次錯誤：${JSON.stringify(response.result.errors)}`);
+    if (warningErrors.length) {
+      console.warn(`批次警告（來源圖片不存在，已跳過）：${JSON.stringify(warningErrors)}`);
+    }
+    if (blockingErrors.length) {
+      console.error(`批次錯誤：${JSON.stringify(blockingErrors)}`);
     }
     await new Promise((resolve) => setTimeout(resolve, 350));
   }
