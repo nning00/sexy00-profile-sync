@@ -1,0 +1,115 @@
+/* Global finishing layer for the Sunrise Editorial front-end. */
+.site-header {
+  height: 82px;
+  padding: 0 max(4vw, 24px);
+  background: rgba(255, 250, 241, .9);
+  border-bottom-color: rgba(239, 207, 192, .72);
+  box-shadow: 0 8px 32px rgba(104, 61, 49, .055);
+}
+.site-header .brand { color: var(--berry); }
+.brand-mark { color: var(--coral); background: #fff7ed; border-color: #ef9c77; }
+.nav-cta { color: white; background: linear-gradient(135deg, var(--coral), var(--deep-rose)); box-shadow: 0 9px 24px rgba(217, 87, 84, .2); }
+.nav-cta:hover { color: white; background: linear-gradient(135deg, #df673f, #c9494f); }
+.region-nav { min-height: 52px; top: 82px; z-index: 80; overflow: visible; color: var(--berry); background: #ffe7a5; border-bottom: 1px solid #ecc77e; }
+.region-dropdown-trigger { min-height: 52px; font-weight: 700; }
+.region-dropdown-trigger span { color: var(--coral); }
+.region-dropdown.is-open .region-dropdown-trigger, .region-dropdown-trigger:hover { color: var(--deep-rose); }
+.region-dropdown-menu {
+  width: var(--dropdown-width);
+  min-width: var(--dropdown-width);
+  max-height: calc(100vh - var(--dropdown-top) - 12px);
+  position: fixed;
+  top: var(--dropdown-top);
+  left: var(--dropdown-left);
+  z-index: 200;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transform: none;
+  border-color: #f0cdb9;
+  border-radius: 16px;
+  box-shadow: 0 22px 48px rgba(81, 48, 42, .16);
+}
+
+/* A warm coral panel keeps the visual journal lively without the previous
+   coffee-brown block feeling disconnected from the sunrise palette. */
+.home-page .gallery-section {
+  background:
+    radial-gradient(circle at 82% 14%, rgba(255, 219, 122, .28), transparent 28%),
+    radial-gradient(circle at 12% 88%, rgba(255, 188, 119, .18), transparent 30%),
+    linear-gradient(135deg, #d65f63 0%, #c95070 52%, #a8466e 100%);
+}
+.home-page .gallery-section .gallery-heading > p:last-child {
+  color: #fff4e8;
+  opacity: .94;
+}
+.home-page .home-articles .article-center-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 380px));
+  justify-content: center;
+}
+.region-dropdown-menu a { border-bottom-color: #f8e5dc; }
+.region-dropdown-menu a:hover { color: var(--deep-rose); background: #fff4e8; }
+.button { border-color: var(--coral); border-radius: 16px; font-weight: 700; letter-spacing: .04em; }
+.button.primary { color: white; background: linear-gradient(135deg, var(--coral), var(--deep-rose)); border-color: transparent; box-shadow: 0 14px 30px rgba(217, 87, 84, .22); }
+.button.primary:hover { color: white; background: linear-gradient(135deg, #e86842, #c9484e); }
+.button.secondary { color: var(--berry); background: #fffaf1; border-color: #e8a57e; }
+.button.secondary:hover { color: white; background: var(--coral); }
+.site-footer {
+  color: #6f4e59;
+  background:
+    radial-gradient(circle at 12% 12%, rgba(255, 198, 92, .22), transparent 25%),
+    linear-gradient(135deg, #fff2d5 0%, #ffe1dc 52%, #ffd0d9 100%);
+  border-top: 1px solid #efbf97;
+}
+.site-footer .footer-brand { color: #673048; }
+.site-footer .footer-line,
+.site-footer h2,
+.site-footer .footer-column h2,
+.site-footer .footer-city-directory h2 { color: #b74450; }
+.site-footer .brand-mark { color: #e65f50; background: #fff7ed; border-color: #ef9c77; }
+.site-footer .footer-about > p,
+.site-footer .footer-column a,
+.site-footer .footer-city-directory a,
+.site-footer .footer-bottom { color: #72545e; }
+.site-footer .footer-line:hover,
+.site-footer .footer-column a:hover,
+.site-footer .footer-city-directory a:hover,
+.site-footer .footer-bottom a:hover { color: #b83e4b; }
+.site-footer .footer-city-directory,
+.site-footer .footer-bottom { border-top-color: rgba(169, 81, 74, .2); }
+.age-gate { background: rgba(75, 41, 54, .76); }
+.age-card { background: linear-gradient(150deg, #fffaf1, #ffe5df); border-radius: 30px; }
+.age-mark { background: linear-gradient(135deg, var(--sun), var(--coral)); }
+
+.article-center, .article-page, .region-page, .city-page, .detail-page, .profile-detail-page { background: #fff7ed; }
+.article-category-tabs { border-color: #f0d0bf; border-radius: 20px; box-shadow: 0 12px 32px rgba(96,57,46,.06); }
+.article-category-tabs a.active, .article-category-tabs a:hover { background: var(--coral); }
+.article-center-card, .article-shell, .article-related, .city-card, .profile-card { border-color: #efd0c1; border-radius: 22px; box-shadow: 0 16px 42px rgba(104, 62, 48, .075); }
+.article-shell { border-top: 8px solid var(--sun); }
+.article-context-links a { background: #fff4df; border-color: #f1d59f; }
+.article-context-links a:hover { background: #ffe8ba; border-color: var(--coral); }
+.region-hero { width: min(1320px, calc(100% - 48px)); min-height: 620px; margin: 34px auto 0; overflow: hidden; background: linear-gradient(135deg, #fff5dc, #ffd9df); border-radius: 34px; }
+.region-hero-image { min-height: 620px; }
+.region-hero-copy h1, .detail-copy h1, .profile-detail-copy h1 { color: var(--berry); }
+.region-rules, .city-seo, .profile-description { background: #fff0db; }
+.region-rules li, .profile-summary > div { background: #fffaf1; border-color: #f0cda4; border-radius: 18px; }
+.profile-card { overflow: hidden; }
+.profile-info { background: white; }
+.profile-summary > div { background: linear-gradient(135deg, #fff6df, #ffdfe3); }
+.profile-carousel { border-color: #efcdbd; border-radius: 26px; }
+.profile-carousel-stage { background: #f6e6dd; border-radius: 18px; }
+.detail-copy { background: linear-gradient(140deg, #fffaf1, #ffe4c9); }
+
+@media (max-width: 980px) {
+  .region-hero { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 700px) {
+  .site-header { height: 68px; padding-inline: 14px; }
+  .region-nav { top: 68px; }
+  .region-hero { width: calc(100% - 24px); margin-top: 14px; border-radius: 24px; }
+  .home-page .gallery-section .gallery-heading > p:last-child {
+    font-size: 13px;
+    line-height: 1.75;
+  }
+  .home-page .home-articles .article-center-grid { grid-template-columns: 1fr; }
+}

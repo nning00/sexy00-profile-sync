@@ -1,0 +1,15 @@
+import MobileMenuClient from "@/components/MobileMenuClient";
+import { regions as fallbackRegions } from "@/data/regions";
+import { articles as fallbackArticles } from "@/data/articles";
+import { getPublicNavigation, getSiteSettings } from "@/lib/cms";
+import { regionDisplayName } from "@/lib/region-display";
+
+export default async function MobileMenu() {
+  const [{ regions: regionData, articles: articleData }, settings] = await Promise.all([
+    getPublicNavigation(),
+    getSiteSettings(),
+  ]);
+  const regions = regionData?.length ? regionData.map((region) => ({ slug: region.slug, name: regionDisplayName(region.slug, region.name), cities: [...(region.cities ?? [])].filter((city) => city.published).sort((a, b) => a.sort_order - b.sort_order).map(({ slug, name }) => ({ slug, name })) })) : fallbackRegions.map((region) => ({ slug: region.slug, name: regionDisplayName(region.slug, region.name), cities: region.cities.map((city) => ({ ...city })) }));
+  const articles = articleData?.length ? articleData : fallbackArticles.map(({ slug, title }) => ({ slug, title }));
+  return <MobileMenuClient regions={regions} articles={articles} labels={{ menu: settings.navigation.mobile_menu, regions: settings.navigation.region_tab, articles: settings.navigation.hot_articles, search: settings.navigation.search_placeholder }} />;
+}

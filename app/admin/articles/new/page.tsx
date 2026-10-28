@@ -1,0 +1,2 @@
+import Link from "next/link"; import ArticleForm from "@/components/admin/ArticleForm"; import { requireAdmin } from "@/lib/supabase/require-admin";
+export default async function NewArticlePage() { const { supabase } = await requireAdmin(); const { data } = await supabase.from("article_categories").select("id,name").eq("published", true).order("sort_order"); return <main className="admin-page admin-form-page"><Link href="/admin/articles">← 返回文章列表</Link><h1>新增文章</h1><ArticleForm categories={data ?? []} /></main>; }
