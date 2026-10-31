@@ -14,7 +14,7 @@ export function completeOpenGraph({
   url,
   title,
   description,
-  siteName = "範例品牌",
+  siteName = "寧兒外送茶",
   image = "/placeholders/hero.svg",
   imageAlt = `${siteName}形象照`,
   type = "website",

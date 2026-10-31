@@ -7,22 +7,20 @@ import AgeGate from "@/components/AgeGate";
 import RegionNav from "@/components/RegionNav";
 import MobileMenu from "@/components/MobileMenu";
 import { profileExamples } from "@/data/profiles";
-import { getContentSettings, getPublishedProfilePageForCity, getSiteSettings, mediaUrl, profileCardPath } from "@/lib/cms";
+import { getContentSettings, getPublishedArticles, getPublishedProfilePageForCity, getSiteSettings, mediaUrl, profileCardPath } from "@/lib/cms";
 import { createPublicClient } from "@/lib/supabase/public";
 import { completeOpenGraph } from "@/lib/seo-metadata";
 import JsonLd from "@/components/JsonLd";
 import { absoluteUrl, breadcrumbStructuredData, imageStructuredData } from "@/lib/structured-data";
 import CityProfileGrid, { type CityProfileCard } from "@/components/CityProfileGrid";
+import { getCityFaqs, getCitySeoContent } from "@/data/city-seo-content";
+import { seoGuides } from "@/data/seo-guides";
 
 const withCity = (text: string, city: string) => text.replace(/\{city\}/g, city);
 export const revalidate = 300;
 // Public city pages use ISR so crawlers and visitors can reuse the rendered
 // response instead of making the Worker rebuild every page on every request.
 // Admin saves and profile syncs explicitly invalidate the related cache tags.
-
-export function generateStaticParams() {
-  return regions.flatMap((region) => region.cities.map((city) => ({ slug: region.slug, city: city.slug })));
-}
 
 const getLocation = unstable_cache(async (regionSlug: string, citySlug: string) => {
   const supabase = createPublicClient();
@@ -47,7 +45,7 @@ const getLocation = unstable_cache(async (regionSlug: string, citySlug: string) 
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string; city: string }> }): Promise<Metadata> {
   const { slug, city: citySlug } = await params;
-  const location = await getLocation(slug, citySlug);
+  const [location, settings] = await Promise.all([getLocation(slug, citySlug), getSiteSettings()]);
   if (!location.region || !location.city) return {};
   return {
     title: location.city.seo_title || `${location.city.name}成人形象介紹與預約諮詢`,
@@ -55,7 +53,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     alternates: { canonical: `/regions/${slug}/${citySlug}` },
     openGraph: completeOpenGraph({
       url: `/regions/${slug}/${citySlug}`,
-      siteName: "範例品牌",
+      siteName: settings.brand.name,
       title: location.city.seo_title || `${location.city.name}成人形象介紹與預約諮詢`,
       description: location.city.seo_description || `${location.city.name}成人形象展示與合法預約諮詢。`,
       image: location.region.image,
@@ -68,7 +66,12 @@ export default async function CityPage({ params }: { params: Promise<{ slug: str
   const { slug, city: citySlug } = await params;
   const { region, city } = await getLocation(slug, citySlug);
   if (!region || !city) notFound();
-  const [profilePage, content, settings] = await Promise.all([getPublishedProfilePageForCity(slug, citySlug, 0, 24), getContentSettings(), getSiteSettings()]);
+  const [profilePage, content, settings, publishedArticles] = await Promise.all([
+    getPublishedProfilePageForCity(slug, citySlug, 0, 24),
+    getContentSettings(),
+    getSiteSettings(),
+    getPublishedArticles(4),
+  ]);
   const displayedProfiles = profilePage.profiles.length ? profilePage.profiles : profileExamples;
   const profileTotal = profilePage.profiles.length ? profilePage.total : profileExamples.length;
   const profileCards: CityProfileCard[] = displayedProfiles.map((profile) => {
@@ -87,6 +90,8 @@ export default async function CityPage({ params }: { params: Promise<{ slug: str
     };
   });
   const cityUrl = `/regions/${region.slug}/${city.slug}`;
+  const localContent = getCitySeoContent(city.slug, city.name);
+  const cityFaqs = getCityFaqs(city.name);
   const cityStructuredData = {
     "@context": "https://schema.org",
     "@graph": [
@@ -117,6 +122,15 @@ export default async function CityPage({ params }: { params: Promise<{ slug: str
           };
         }),
       },
+      {
+        "@type": "FAQPage",
+        "@id": `${absoluteUrl(cityUrl)}#faq`,
+        mainEntity: cityFaqs.map((faq) => ({
+          "@type": "Question",
+          name: faq.question,
+          acceptedAnswer: { "@type": "Answer", text: faq.answer },
+        })),
+      },
     ],
   };
 
@@ -136,14 +150,44 @@ export default async function CityPage({ params }: { params: Promise<{ slug: str
           <div className="article-breadcrumbs"><Link href="/">首頁</Link><span>/</span><Link href={`/regions/${region.slug}/overview`}>{region.name}</Link><span>/</span><strong>{city.name}</strong></div>
           <h1>{city.page_title || `${city.name}地區精選資訊`}</h1>
           <p>{city.gallery_description || `瀏覽${city.name}地區的成人形象介紹與公開資訊；實際內容與可安排情況，請透過正式聯絡方式確認。`}</p>
+          <p className="city-profile-count">目前共整理 {profileTotal} 筆公開形象資訊；頁面數量不代表即時可安排。</p>
         </div>
         <div className="city-gallery-heading"><h2>{city.gallery_title || `${city.name}${content.labels.city_gallery_heading_suffix}`}</h2></div>
         <CityProfileGrid profiles={profileCards} total={profileTotal} regionSlug={slug} citySlug={citySlug} />
       </section>
 
       <section className="city-seo section">
-        <div><h2>{city.name}{content.labels.city_info_heading_suffix}</h2></div>
-        <div><p>{city.summary || `${city.name}地區提供成人形象介紹與合法預約諮詢資訊，所有互動皆以成年人、自願、尊重隱私為前提。`}</p><p>{withCity(content.labels.city_info_notice, city.name)}</p></div>
+        <div><p className="eyebrow">LOCAL PLANNING</p><h2>{city.name}{content.labels.city_info_heading_suffix}</h2></div>
+        <div>
+          <p>{city.summary || `${city.name}地區提供成人形象介紹與合法預約諮詢資訊，所有互動皆以成年人、自願、尊重隱私為前提。`}</p>
+          <p>{localContent.localContext}</p>
+          <p>{localContent.timing}</p>
+          <p>{localContent.planning}</p>
+          <p>{withCity(content.labels.city_info_notice, city.name)}</p>
+        </div>
+      </section>
+
+      <section className="city-local-guide section" aria-labelledby="city-local-guide-title">
+        <div>
+          <p className="eyebrow">AREA CHECK</p>
+          <h2 id="city-local-guide-title">{city.name}詢問前的地區確認</h2>
+          <p>常見搜尋生活圈包含下列區域；是否能安排、交通時間與實際地點仍以正式回覆為準。</p>
+          <ul>{localContent.areas.map((area) => <li key={area}>{area}</li>)}</ul>
+        </div>
+        <div className="city-guide-links">
+          <h2>先閱讀流程與安全指南</h2>
+          {seoGuides.slice(0, 3).map((guide) => <Link href={`/guides/${guide.slug}`} key={guide.slug}><strong>{guide.title}</strong><span>{guide.description}</span></Link>)}
+        </div>
+      </section>
+
+      {publishedArticles.length > 0 && <section className="city-article-links section" aria-labelledby="city-article-links-title">
+        <div><p className="eyebrow">RELATED ARTICLES</p><h2 id="city-article-links-title">預約前延伸閱讀</h2></div>
+        <div>{publishedArticles.map((article) => <Link href={`/articles/${article.slug}`} key={article.slug}><strong>{article.title}</strong><span>{article.excerpt || "閱讀流程、安全與隱私注意事項。"}</span></Link>)}</div>
+      </section>}
+
+      <section className="city-faq section" aria-labelledby="city-faq-title">
+        <p className="eyebrow">FAQ</p><h2 id="city-faq-title">{city.name}地區常見問題</h2>
+        <div>{cityFaqs.map((faq) => <details key={faq.question}><summary>{faq.question}</summary><p>{faq.answer}</p></details>)}</div>
       </section>
 
       <section className="contact section">

@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { articles } from "@/data/articles";
-import { articleParagraphs, getPublishedArticle, getPublishedArticles, getSiteSettings, mediaUrl } from "@/lib/cms";
+import { articleParagraphs, getPublicNavigation, getPublishedArticle, getPublishedArticles, getSiteSettings, mediaUrl } from "@/lib/cms";
 import SiteHeader from "@/components/SiteHeader";
 import { articleCategoryName } from "@/components/ArticleCards";
 import JsonLd from "@/components/JsonLd";
@@ -11,6 +11,13 @@ import { completeOpenGraph } from "@/lib/seo-metadata";
 import { absoluteUrl, breadcrumbStructuredData, imageStructuredData, siteUrl } from "@/lib/structured-data";
 
 type ContextualArticleLink = { href: string; label: string };
+
+const sectionHeadingPattern = /^(?:第[一二三四五六七八九十百]+[章節]|[一二三四五六七八九十]+、|\d+[.、])\s*\S.{0,38}$/;
+
+function isArticleSectionHeading(text: string) {
+  const normalized = text.trim();
+  return normalized.length <= 44 && sectionHeadingPattern.test(normalized) && !/[。！？]$/.test(normalized);
+}
 
 const contextualArticleLinks: Record<string, ContextualArticleLink[]> = {
   "how-to-spot-fake-photos-and-scams": [
@@ -74,13 +81,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function ArticlePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const [article, publishedArticles, settings] = await Promise.all([
+  const [article, publishedArticles, settings, navigation] = await Promise.all([
     findArticle(slug),
     getPublishedArticles(8),
     getSiteSettings(),
+    getPublicNavigation(),
   ]);
   if (!article) notFound();
   const date = "published_at" in article && article.published_at ? article.published_at.slice(0, 10) : "date" in article ? article.date : "";
+  const updatedDate = "updated_at" in article && article.updated_at ? article.updated_at.slice(0, 10) : date;
   const paragraphs = "content" in article ? articleParagraphs(article.content) : [];
   const categorySlug = "article_categories" in article ? article.article_categories?.slug : undefined;
   const coverImage = "cover_image_path" in article ? article.cover_image_path : null;
@@ -93,6 +102,10 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     .slice(0, 3);
   const categoryName = articleCategoryName(article as never);
   const articleUrl = absoluteUrl(`/articles/${article.slug}`);
+  const cityLinks = navigation.regions.flatMap((region) => (region.cities ?? [])
+    .filter((city) => city.published)
+    .map((city) => ({ name: city.name, href: `/regions/${region.slug}/${city.slug}` })))
+    .slice(0, 10);
   const imageData = coverImage ? imageStructuredData(mediaUrl(coverImage), coverAlt) : undefined;
   const breadcrumbItems = [
     { name: "首頁", path: "/" },
@@ -128,12 +141,13 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
         <div className="article-breadcrumbs"><Link href="/">首頁</Link><span>/</span><Link href="/articles">全部文章</Link>{categorySlug && <><span>/</span><Link href={`/articles/category/${categorySlug}`}>{categoryName}</Link></>}</div>
         <p className="eyebrow">{categoryName} · SEO ARTICLE</p>
         <h1>{article.title}</h1>
-        <p className="article-date">發布日期：{date}</p>
+        <div className="article-meta"><span>發布日期：{date}</span>{updatedDate && updatedDate !== date && <span>最後更新：{updatedDate}</span>}</div>
         <p className="article-lead">{article.excerpt}</p>
+        <div className="article-author"><strong>{settings.brand.name}內容編輯團隊</strong><span>依公開資訊、網站流程與安全原則整理；重大內容變更會更新日期。</span></div>
         {coverImage && <figure className="article-cover"><Image src={mediaUrl(coverImage)} alt={coverAlt} fill sizes="(max-width: 560px) calc(100vw - 50px), 740px" priority /></figure>}
         {"sections" in article
           ? article.sections.map(([heading, content]) => <section key={heading}><h2>{heading}</h2><p>{content}</p></section>)
-          : paragraphs.map((paragraph, index) => <section key={`${index}-${paragraph.slice(0, 12)}`}><p>{paragraph}</p></section>)}
+          : paragraphs.map((paragraph, index) => <section key={`${index}-${paragraph.slice(0, 12)}`}>{isArticleSectionHeading(paragraph) ? <h2>{paragraph}</h2> : <p>{paragraph}</p>}</section>)}
         {articleImages.length > 0 && <section className="article-body-gallery" aria-label="文章圖片">
           {articleImages.map((image, index) => <figure key={image.id || `${image.storage_path}-${index}`}>
             <Image src={mediaUrl(image.storage_path)} alt={image.alt_text || `${article.title}文章圖片 ${index + 1}`} fill sizes="(max-width: 560px) calc(100vw - 50px), 740px" />
@@ -143,6 +157,12 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
           <h2 id="article-context-links-title">相關指南</h2>
           <ul>{contextualLinks.map((item) => <li key={item.href}><Link href={item.href}>{item.label}</Link></li>)}</ul>
         </section>}
+        <section className="article-city-links" aria-labelledby="article-city-links-title">
+          <h2 id="article-city-links-title">瀏覽城市公開資訊</h2>
+          <p>依實際所在地選擇城市；公開筆數不代表即時可安排，仍須透過正式聯絡方式確認。</p>
+          <div>{cityLinks.map((city) => <Link href={city.href} key={city.href}>{city.name}</Link>)}</div>
+          <Link className="article-guide-link" href="/guides/taiwan-region-directory">查看全台地區總覽 →</Link>
+        </section>
         <div className="article-notice">本文為一般安全與資訊說明，不構成法律意見；實際活動請遵守所在地法規。</div>
         <div className="article-line-contact">
           <p>想進一步了解相關資訊？歡迎透過 LINE 與我們聯絡。</p>

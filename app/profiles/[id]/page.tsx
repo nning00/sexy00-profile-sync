@@ -8,12 +8,13 @@ import OptimizedMediaImage from "@/components/OptimizedMediaImage";
 import ProfileGallery from "@/components/ProfileGallery";
 import RegionNav from "@/components/RegionNav";
 import { profileExamples } from "@/data/profiles";
-import { getContentSettings, getPublishedProfile, getRelatedProfiles, getSiteSettings, mediaUrl, profileCardPath } from "@/lib/cms";
+import { getContentSettings, getPublishedProfile, getPublishedProfileSeoDuplicateCount, getRelatedProfiles, getSiteSettings, mediaUrl, profileCardPath } from "@/lib/cms";
 import { parseProfileDetails, profileDetailKeys } from "@/lib/profile-details";
 import { toEnglishProfileSlug } from "@/lib/profile-slugs";
 import { completeOpenGraph } from "@/lib/seo-metadata";
 import JsonLd from "@/components/JsonLd";
 import { absoluteUrl, breadcrumbStructuredData, imageStructuredData } from "@/lib/structured-data";
+import { isIndexableProfile } from "@/lib/profile-indexing";
 
 export const revalidate = 300;
 export const dynamicParams = true;
@@ -37,9 +38,14 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const storedTitle = ("seo_title" in profile && profile.seo_title) || `${name}｜成人形象介紹`;
   const storedDescription = ("seo_description" in profile && profile.seo_description) || "形象資訊、照片介紹與聯絡前須知。";
   const description = storedDescription.includes(name) ? storedDescription : `${name}：${storedDescription}`;
+  const duplicateCount = "display_name" in profile && isIndexableProfile(profile)
+    ? await getPublishedProfileSeoDuplicateCount(profile.seo_title ?? "", profile.seo_description ?? "")
+    : 0;
+  const indexable = "display_name" in profile ? isIndexableProfile(profile) && duplicateCount <= 1 : true;
   return {
     title: storedTitle.includes(settings.brand.name) ? { absolute: storedTitle } : storedTitle,
     description,
+    robots: indexable ? { index: true, follow: true } : { index: false, follow: true },
     alternates: { canonical: `/profiles/${"slug" in profile ? profile.slug : profile.id}` },
     openGraph: completeOpenGraph({
       url: `/profiles/${"slug" in profile ? profile.slug : profile.id}`,

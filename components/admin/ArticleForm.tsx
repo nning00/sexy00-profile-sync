@@ -25,7 +25,6 @@ export default function ArticleForm({ initial, categories, existingImages = [] }
     event.preventDefault(); setSaving(true); setMessage("");
     try {
     const form = new FormData(event.currentTarget);
-    const nextStatus = String(form.get("status") ?? "draft");
     const categoryId = String(form.get("category_id") ?? "");
     const selectedCategory = categories.find((item) => item.id === categoryId);
     const coverValue = form.get("cover_image");

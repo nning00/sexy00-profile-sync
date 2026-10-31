@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireAdmin } from "@/lib/supabase/require-admin";
+import { profileIndexingIssues } from "@/lib/profile-indexing";
 
-type Profile = { id: string; slug: string; display_name: string; seo_title: string | null; seo_description: string | null };
+type Profile = { id: string; slug: string; display_name: string; introduction: string | null; card_image_path: string | null; seo_title: string | null; seo_description: string | null; profile_images?: Array<{ storage_path: string; alt_text: string | null }> };
 type Article = { id: string; slug: string; title: string; status: string; seo_title: string | null; seo_description: string | null };
 type Category = { id: string; slug: string; name: string; published: boolean; seo_title: string | null; seo_description: string | null };
 type City = { id: string; slug: string; name: string; summary: string | null; seo_title: string | null; seo_description: string | null; region_id: string; published: boolean };
@@ -34,7 +35,7 @@ export default async function AdminSeoPage() {
   for (let start = 0; ; start += pageSize) {
     const { data, error } = await supabase
       .from("profiles")
-      .select("id,slug,display_name,seo_title,seo_description")
+      .select("id,slug,display_name,introduction,card_image_path,seo_title,seo_description,profile_images(storage_path,alt_text)")
       .eq("status", "published")
       .range(start, start + pageSize - 1);
     if (error) throw error;
@@ -84,6 +85,10 @@ export default async function AdminSeoPage() {
     if (looksLikeKeywordList(item.seo_description)) issues.push({ item, reason: "SEO 描述像關鍵字清單，建議改成自然完整句", value: clean(item.seo_description) });
     return issues;
   });
+  const nonIndexableProfiles: Issue<Profile>[] = profiles.flatMap((item) => {
+    const reasons = profileIndexingIssues(item);
+    return reasons.length ? [{ item, reason: `目前不送交 Sitemap：${reasons.join("、")}` }] : [];
+  });
   const escapedBrand = brandName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const categoryBrandPattern = new RegExp(`(?:[-–—｜|]\\s*)?${escapedBrand}\\s*$`, "i");
   const categoryBrandIssues: Issue<Category>[] = categories.filter((item) => categoryBrandPattern.test(clean(item.seo_title))).map((item) => ({ item, reason: `標題已包含「${brandName}」，前台還會自動附加一次`, value: clean(item.seo_title) }));
@@ -91,7 +96,7 @@ export default async function AdminSeoPage() {
 
   const duplicateCount = profileTitleDuplicates.length + profileDescriptionDuplicates.length + articleTitleDuplicates.length + articleDescriptionDuplicates.length + categoryTitleDuplicates.length + cityTitleDuplicates.length;
   const incompleteCount = incompleteProfiles.length + incompleteArticles.length + incompleteCategories.length + incompleteCities.length + defaultSeoIssues.length;
-  const qualityCount = textIssues.length + weakProfiles.length + categoryBrandIssues.length + thinCities.length;
+  const qualityCount = textIssues.length + weakProfiles.length + nonIndexableProfiles.length + categoryBrandIssues.length + thinCities.length;
   const issueCount = duplicateCount + incompleteCount + qualityCount + orphanCities.length;
 
   return <main className="admin-page admin-seo-page">
@@ -105,6 +110,7 @@ export default async function AdminSeoPage() {
     </section>
     <SeoSection title="疑似錯字或異常文字" description="檢查中英文字誤植、重複詞、程式文字與亂碼。" count={textIssues.length}>{textIssues.map((issue, index) => <IssueLink key={`${issue.href}-${index}`} href={issue.href} label={issue.label} reason={issue.reason} value={issue.value} />)}</SeoSection>
     <SeoSection title="形象描述品質" description="標題不應只有過度簡略的通用詞，描述也不應只是大量堆疊地名或關鍵字。" count={weakProfiles.length}>{weakProfiles.map((issue, index) => <IssueLink key={`${issue.item.id}-${index}`} href={`/admin/profiles/${issue.item.id}/edit`} label={issue.item.display_name} reason={issue.reason} value={issue.value} />)}</SeoSection>
+    <SeoSection title="形象索引資格" description="未達最低內容、圖片與 SEO 完整度的形象仍可在前台瀏覽，但會標示 noindex 並排除在 Sitemap 外。" count={nonIndexableProfiles.length}>{nonIndexableProfiles.map((issue) => <IssueLink key={issue.item.id} href={`/admin/profiles/${issue.item.id}/edit`} label={issue.item.display_name} reason={issue.reason} />)}</SeoSection>
     <SeoSection title="形象 SEO 重複" description="直接比較後台原始標題與描述，避免每位形象使用同一組關鍵字。" count={profileTitleDuplicates.length + profileDescriptionDuplicates.length}>{[...profileTitleDuplicates, ...profileDescriptionDuplicates].map((issue, index) => <IssueLink key={`${issue.item.id}-${index}`} href={`/admin/profiles/${issue.item.id}/edit`} label={issue.item.display_name} reason={issue.reason} value={issue.value} />)}</SeoSection>
     <SeoSection title="文章 SEO 重複" description="僅檢查已發布文章；每篇文章應有不同的搜尋主題與摘要。" count={articleTitleDuplicates.length + articleDescriptionDuplicates.length}>{[...articleTitleDuplicates, ...articleDescriptionDuplicates].map((issue, index) => <IssueLink key={`${issue.item.id}-${index}`} href={`/admin/articles/${issue.item.id}/edit`} label={issue.item.title} reason={issue.reason} value={issue.value} />)}</SeoSection>
     <SeoSection title="文章分類 SEO 問題" description="分類頁不得重複品牌名稱，也應避免彼此使用相同標題。" count={categoryBrandIssues.length + categoryTitleDuplicates.length + incompleteCategories.length}>{[...categoryBrandIssues, ...categoryTitleDuplicates, ...incompleteCategories].map((issue, index) => <IssueLink key={`${issue.item.id}-${index}`} href="/admin/settings#article-categories" label={issue.item.name} reason={issue.reason} value={issue.value} />)}</SeoSection>
@@ -115,4 +121,3 @@ export default async function AdminSeoPage() {
 
 function IssueLink({ href, label, reason, value }: { href: string; label: string; reason: string; value?: string }) { return <Link href={href}><span><strong>{label}</strong><small>{reason}{value ? ` · ${value}` : ""}</small></span><b>前往處理 →</b></Link>; }
 function SeoSection({ title, description, count, children }: { title: string; description: string; count: number; children: React.ReactNode }) { return <details className="seo-health-section" open={count > 0}><summary><span><strong>{title}</strong><small>{description}</small></span><i>{count}</i></summary><div className="seo-health-list">{count ? children : <p>目前沒有發現這類問題。</p>}</div></details>; }
-

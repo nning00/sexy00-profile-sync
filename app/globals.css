@@ -509,12 +509,31 @@ h2 { margin: 0; font-size: clamp(36px, 4vw, 58px); line-height: 1.4; letter-spac
 .profile-info i { font-style: normal; }
 .city-seo { padding-top: 68px; padding-bottom: 68px; display: grid; grid-template-columns: .8fr 1.2fr; gap: 7%; background: var(--pale); }
 .city-seo > div:last-child { color: var(--muted); line-height: 2; }
+.city-profile-count { margin-top: 12px; color: var(--deep-rose); font-size: 13px; }
+.city-local-guide { display: grid; grid-template-columns: .85fr 1.15fr; gap: clamp(28px, 6vw, 78px); background: #fffaf2; }
+.city-local-guide > div > p, .city-article-links > div > p { color: var(--muted); line-height: 1.9; }
+.city-local-guide ul { margin: 24px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 9px; list-style: none; }
+.city-local-guide li { padding: 9px 14px; color: var(--deep-rose); background: white; border: 1px solid var(--line); border-radius: 99px; }
+.city-guide-links, .city-article-links > div:last-child { display: grid; gap: 12px; }
+.city-guide-links > a, .city-article-links a { padding: 18px 20px; display: grid; gap: 7px; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 14px; transition: transform .2s ease, border-color .2s ease; }
+.city-guide-links > a:hover, .city-article-links a:hover { transform: translateY(-2px); border-color: var(--coral); }
+.city-guide-links span, .city-article-links span { color: var(--muted); font-size: 13px; line-height: 1.7; }
+.city-article-links { display: grid; grid-template-columns: .72fr 1.28fr; gap: clamp(28px, 6vw, 78px); background: #fff1e5; }
+.city-faq { background: #fffaf2; }
+.city-faq > h2 { margin-bottom: 26px; }
+.city-faq > div { display: grid; gap: 10px; }
+.city-faq details { padding: 18px 20px; background: white; border: 1px solid var(--line); border-radius: 12px; }
+.city-faq summary { color: var(--ink); font-weight: 600; cursor: pointer; }
+.city-faq details p { margin: 13px 0 0; color: var(--muted); line-height: 1.8; }
 
 .article-page { min-height: 100vh; padding: 80px 24px; background: var(--pale); }
 .article-shell { width: min(820px, 100%); margin: auto; padding: 70px clamp(24px, 7vw, 80px); background: white; border: 1px solid var(--line); }
 .article-shell h1 { font-size: clamp(42px, 6vw, 64px); line-height: 1.35; }
-.article-date { color: #9e898e; font-size: 13px; }
+.article-date, .article-meta { color: #9e898e; font-size: 13px; }
+.article-meta { display: flex; flex-wrap: wrap; gap: 8px 18px; }
 .article-lead { margin: 35px 0 50px; color: var(--muted); font-size: 18px; line-height: 2; }
+.article-author { margin: -28px 0 42px; padding: 18px 20px; display: grid; gap: 5px; color: var(--muted); background: #fff8ec; border: 1px solid var(--line); border-left: 4px solid var(--coral); font-size: 13px; line-height: 1.65; }
+.article-author strong { color: var(--ink); font-size: 14px; }
 .article-cover { width: 100%; aspect-ratio: 16 / 9; margin: -12px 0 34px; position: relative; overflow: hidden; background: var(--pale); border: 1px solid var(--line); }
 .article-cover img { object-fit: cover; }
 .article-shell section { padding: 30px 0; border-top: 1px solid var(--line); }
@@ -528,6 +547,11 @@ h2 { margin: 0; font-size: clamp(36px, 4vw, 58px); line-height: 1.4; letter-spac
 .article-context-links li { margin: 0; }
 .article-context-links a { display: block; padding: 13px 16px; color: var(--ink); background: var(--pale); border: 1px solid var(--line); border-radius: 10px; line-height: 1.65; text-decoration: none; transition: border-color .2s ease, background .2s ease; }
 .article-context-links a:hover { background: #fff7f8; border-color: var(--rose); }
+.article-shell .article-city-links { margin-top: 10px; padding-bottom: 14px; }
+.article-city-links > p { margin-bottom: 18px; }
+.article-city-links > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.article-city-links > div a { padding: 8px 13px; color: var(--deep-rose); background: #fff8ec; border: 1px solid var(--line); border-radius: 99px; }
+.article-city-links .article-guide-link { margin-top: 18px; display: inline-block; color: var(--deep-rose); font-weight: 600; }
 .article-notice { margin-top: 35px; padding: 20px; color: #8d767c; background: var(--pale); font-size: 13px; line-height: 1.7; }
 .article-line-contact { margin-top: 36px; padding-top: 34px; display: grid; justify-items: center; gap: 18px; border-top: 1px solid var(--line); text-align: center; }
 .article-line-contact p { margin: 0; color: var(--muted); line-height: 1.8; }
@@ -564,6 +588,29 @@ h2 { margin: 0; font-size: clamp(36px, 4vw, 58px); line-height: 1.4; letter-spac
 .article-empty { padding: 60px; text-align: center; color: var(--muted); }
 .article-breadcrumbs { margin-bottom: 30px; display: flex; gap: 10px; color: var(--muted); font-size: 13px; }
 .article-browse-actions, .home-articles-action { margin-top: 26px; display: flex; justify-content: center; gap: 12px; }
+.guide-index, .guide-page { min-height: 70vh; padding: 72px max(5vw, 22px) 90px; background: #fff7ed; }
+.guide-index > header { width: min(760px, 100%); margin: 0 auto 38px; text-align: center; }
+.guide-index > header h1 { font-size: clamp(42px, 5vw, 68px); }
+.guide-index > header > p:last-child { color: var(--muted); line-height: 1.9; }
+.guide-index-grid { width: min(1120px, 100%); margin: auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.guide-index-grid > a { min-height: 320px; padding: clamp(28px, 5vw, 48px); display: flex; flex-direction: column; color: var(--ink); background: white; border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 16px 42px rgba(104,62,48,.075); transition: transform .2s ease, border-color .2s ease; }
+.guide-index-grid > a:hover { transform: translateY(-4px); border-color: var(--coral); }
+.guide-index-grid > a > span { width: 44px; height: 44px; display: grid; place-items: center; color: var(--deep-rose); background: #fff1d4; border-radius: 50%; font-weight: 700; }
+.guide-index-grid > a > p { color: var(--deep-rose); font-size: 12px; letter-spacing: .16em; }
+.guide-index-grid h2 { margin: 10px 0 16px; font-size: clamp(26px, 3vw, 36px); line-height: 1.45; }
+.guide-index-grid small { color: var(--muted); font-size: 14px; line-height: 1.85; }
+.guide-index-grid strong { margin-top: auto; padding-top: 24px; color: var(--deep-rose); }
+.guide-shell { width: min(840px, 100%); margin: auto; padding: clamp(30px, 7vw, 76px); background: white; border: 1px solid var(--line); border-top: 8px solid var(--sun); box-shadow: 0 16px 42px rgba(104,62,48,.075); }
+.guide-shell > h1 { font-size: clamp(40px, 6vw, 64px); line-height: 1.35; }
+.guide-lead { margin: 28px 0 50px; color: var(--muted); font-size: 18px; line-height: 2; }
+.guide-shell section { padding: 32px 0; border-top: 1px solid var(--line); }
+.guide-shell section h2 { margin-bottom: 16px; font-size: clamp(24px, 3vw, 30px); }
+.guide-shell section p, .guide-shell section li { color: var(--muted); line-height: 2; }
+.guide-shell section ul { padding-left: 1.3em; }
+.guide-faq details { margin-top: 10px; padding: 17px 18px; background: #fff8ec; border: 1px solid var(--line); border-radius: 12px; }
+.guide-faq summary { color: var(--ink); font-weight: 600; cursor: pointer; }
+.guide-city-links > div { display: flex; flex-wrap: wrap; gap: 8px; }
+.guide-city-links > div a { padding: 8px 13px; color: var(--deep-rose); background: #fff8ec; border: 1px solid var(--line); border-radius: 99px; }
 .home-articles { background: var(--pale); }
 .admin-category-manager { margin-top: 48px; padding-top: 38px; border-top: 2px solid var(--line); }
 .admin-category-heading { margin-bottom: 18px; display: flex; align-items: end; justify-content: space-between; gap: 20px; }
@@ -978,6 +1025,8 @@ h2 { margin: 0; font-size: clamp(36px, 4vw, 58px); line-height: 1.4; letter-spac
   .region-rules { grid-template-columns: 1fr; }
   .profile-grid { grid-template-columns: 1fr 1fr; }
   .city-seo { grid-template-columns: 1fr; gap: 35px; }
+  .city-local-guide, .city-article-links { grid-template-columns: 1fr; }
+  .guide-index-grid { grid-template-columns: 1fr; }
   .profile-detail-hero { grid-template-columns: 1fr; }
   .profile-detail-hero { gap: 0; }
   .profile-detail-copy { padding-top: 28px; }
@@ -992,6 +1041,13 @@ h2 { margin: 0; font-size: clamp(36px, 4vw, 58px); line-height: 1.4; letter-spac
 }
 
 @media (max-width: 560px) {
+  .guide-index, .guide-page { padding: 36px 12px 56px; }
+  .guide-index > header h1 { font-size: 38px; }
+  .guide-index-grid > a { min-height: 0; padding: 26px 22px; }
+  .guide-shell { padding: 34px 20px; }
+  .guide-shell > h1 { font-size: 36px; }
+  .city-local-guide, .city-article-links, .city-faq { padding-left: 20px; padding-right: 20px; }
+  .article-author { margin-top: -24px; }
   .admin-review-count { width: 100%; }
   .admin-review-all-form { align-items: stretch; flex-direction: column; gap: 10px; }
   .admin-review-all-button { width: 100%; min-width: 0; }

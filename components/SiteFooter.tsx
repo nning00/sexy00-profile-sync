@@ -18,7 +18,7 @@ export default async function SiteFooter() {
   return <footer className="site-footer"><div className="footer-main">
     <div className="footer-about"><Link className="brand footer-brand" href="/"><BrandMark /><span>{settings.brand.name}</span></Link><p>{settings.brand.footer_text}</p><a className="footer-line" href={settings.brand.line_url} target="_blank" rel="noopener noreferrer">LINE 聯絡我們 →</a></div>
     <div className="footer-column"><h2>地區專區</h2>{regions.filter((region) => region.firstCity).map((region) => <Link href={`/regions/${region.slug}/${region.firstCity}`} key={region.slug}>{region.name}</Link>)}</div>
-    <div className="footer-column"><h2>服務方式</h2>{content.services.map((service) => <Link href={`/services/${service.slug}`} key={service.slug}>{service.title}</Link>)}<Link href="/#faq">{content.labels.faq_heading}</Link></div>
+    <div className="footer-column"><h2>服務方式</h2>{content.services.map((service) => <Link href={`/services/${service.slug}`} key={service.slug}>{service.title}</Link>)}<Link href="/guides"><strong>完整指南</strong></Link><Link href="/#faq">{content.labels.faq_heading}</Link></div>
     <div className="footer-column footer-articles"><h2>熱門文章</h2><Link href="/articles"><strong>瀏覽全部文章</strong></Link>{articles.map((article) => <Link href={`/articles/${article.slug}`} key={article.slug}>{article.title}</Link>)}</div>
     <nav className="footer-city-directory" aria-label="全部城市頁面">
       <h2>全部城市</h2>

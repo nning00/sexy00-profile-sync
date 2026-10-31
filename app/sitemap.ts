@@ -4,12 +4,14 @@ import { articles } from "@/data/articles";
 import { profileExamples } from "@/data/profiles";
 import { getArticleCategories, getContentSettings, getPublishedArticles, getPublishedProfiles } from "@/lib/cms";
 import { createPublicClient } from "@/lib/supabase/public";
+import { isIndexableProfile, profileSeoFingerprint } from "@/lib/profile-indexing";
+import { seoGuides } from "@/data/seo-guides";
 
 const configuredSiteUrl = (process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_URL)?.trim();
 const siteUrl = (
   configuredSiteUrl && !/^(?:https?:\/\/)?(?:localhost|127\.0\.0\.1)(?::|\/|$)/i.test(configuredSiteUrl)
     ? configuredSiteUrl
-    : "https://sexyning.cc"
+    : "https://sexy00.cc"
 ).replace(/\/$/, "");
 export const revalidate = 3600;
 
@@ -33,7 +35,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${siteUrl}/articles`, changeFrequency: "weekly", priority: 0.8 },
     { url: `${siteUrl}/privacy`, changeFrequency: "yearly", priority: 0.2 },
     { url: `${siteUrl}/terms`, changeFrequency: "yearly", priority: 0.2 },
+    { url: `${siteUrl}/guides`, changeFrequency: "monthly", priority: 0.8 },
   ];
+  const guidePages: MetadataRoute.Sitemap = seoGuides.map((guide) => ({
+    url: `${siteUrl}/guides/${guide.slug}`,
+    changeFrequency: "monthly",
+    priority: 0.75,
+  }));
   const servicePages: MetadataRoute.Sitemap = content.services.map((service) => ({
     url: `${siteUrl}/services/${service.slug}`,
     changeFrequency: "monthly",
@@ -55,7 +63,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     changeFrequency: "monthly" as const,
     priority: 0.65,
   }));
-  const profileSource = cmsProfiles.length ? cmsProfiles : profileExamples;
+  const seenProfileSeo = new Set<string>();
+  const profileSource = cmsProfiles.length ? cmsProfiles.filter((profile) => {
+    if (!isIndexableProfile(profile)) return false;
+    const fingerprint = profileSeoFingerprint(profile);
+    if (seenProfileSeo.has(fingerprint)) return false;
+    seenProfileSeo.add(fingerprint);
+    return true;
+  }) : profileExamples;
   const profilePages: MetadataRoute.Sitemap = profileSource.map((profile) => ({
     url: `${siteUrl}/profiles/${"slug" in profile ? profile.slug : profile.id}`,
     lastModified: validDate("updated_at" in profile ? profile.updated_at : undefined),
@@ -63,5 +78,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
   const categoryPages: MetadataRoute.Sitemap = categories.map((category) => ({ url: `${siteUrl}/articles/category/${category.slug}`, changeFrequency: "weekly", priority: 0.7 }));
-  return [...staticPages, ...servicePages, ...cityPages, ...categoryPages, ...articlePages, ...profilePages];
+  return [...staticPages, ...guidePages, ...servicePages, ...cityPages, ...categoryPages, ...articlePages, ...profilePages];
 }

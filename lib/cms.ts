@@ -9,7 +9,7 @@ export type CmsProfile = {
   profile_images?: Array<{ storage_path: string; alt_text: string | null; sort_order: number }>;
 };
 
-export type CmsProfileIndex = Pick<CmsProfile, "id" | "slug" | "updated_at">;
+export type CmsProfileIndex = Pick<CmsProfile, "id" | "slug" | "display_name" | "introduction" | "card_image_path" | "seo_title" | "seo_description" | "updated_at" | "profile_images">;
 
 export type CmsArticle = {
   id: string; slug: string; title: string; excerpt: string | null; category: string | null;
@@ -54,7 +54,10 @@ async function getPublishedProfilesUncached() {
   const pageSize = 1000;
   for (let start = 0; ; start += pageSize) {
     const { data, error } = await supabase.from("profiles")
-      .select("id,slug,updated_at")
+      // Sitemap generation runs across thousands of records. Requiring the
+      // dedicated card image keeps this query small and avoids expanding every
+      // gallery row only to decide indexing eligibility.
+      .select("id,slug,display_name,introduction,card_image_path,seo_title,seo_description,updated_at")
       .eq("status", "published")
       .order("sort_order")
       .order("created_at", { ascending: false })
@@ -108,6 +111,16 @@ async function getPublishedProfileUncached(slug: string) {
   const profile = data as CmsProfile;
   profile.profile_images = [...(profile.profile_images ?? [])].sort((a, b) => a.sort_order - b.sort_order);
   return profile;
+}
+
+async function getPublishedProfileSeoDuplicateCountUncached(seoTitle: string, seoDescription: string) {
+  if (!seoTitle.trim() || !seoDescription.trim()) return 0;
+  const { count, error } = await createPublicClient().from("profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "published")
+    .eq("seo_title", seoTitle)
+    .eq("seo_description", seoDescription);
+  return error ? 1 : count ?? 0;
 }
 
 async function getRelatedProfilesUncached(profileId: string, limit = 8) {
@@ -256,6 +269,7 @@ export const getPublishedProfiles = unstable_cache(getPublishedProfilesUncached,
 export const getPublishedProfilesForCity = unstable_cache(getPublishedProfilesForCityUncached, ["published-profiles-city"], { ...cacheOptions, tags: ["profiles", "regions"] });
 export const getPublishedProfilePageForCity = unstable_cache(getPublishedProfilePageForCityUncached, ["published-profile-page-city"], { ...cacheOptions, tags: ["profiles", "regions"] });
 export const getPublishedProfile = unstable_cache(getPublishedProfileUncached, ["published-profile"], { ...cacheOptions, tags: ["profiles"] });
+export const getPublishedProfileSeoDuplicateCount = unstable_cache(getPublishedProfileSeoDuplicateCountUncached, ["published-profile-seo-duplicate-count"], { ...cacheOptions, tags: ["profiles"] });
 export const getRelatedProfiles = unstable_cache(getRelatedProfilesUncached, ["related-profiles"], { ...cacheOptions, tags: ["profiles", "regions"] });
 export const getPublishedArticles = unstable_cache(getPublishedArticlesUncached, ["published-articles"], { ...cacheOptions, tags: ["articles"] });
 export const getPublicNavigation = unstable_cache(getPublicNavigationUncached, ["public-navigation"], { ...cacheOptions, tags: ["regions", "articles"] });
