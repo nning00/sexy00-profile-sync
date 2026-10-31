@@ -63,6 +63,30 @@ function clean(value: unknown, max = 2000) {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
 }
 
+function publicDetail(value: unknown, max = 100) {
+  const normalized = clean(value, max)
+    .replace(/&#(?:45|8211|8212);?/gi, "-")
+    .replace(/&(?:ndash|mdash);?/gi, "-")
+    .trim();
+  if (!normalized || /^(?:\?|[-–—]+|n\/?a|null|undefined|unknown|未知|不詳|未填|\{[^}]+\})$/i.test(normalized)) return "";
+  return normalized;
+}
+
+function ageLabel(value: unknown) {
+  const age = publicDetail(value, 30);
+  return age && /^\d{2}$/.test(age) ? `${age}歲` : age;
+}
+
+function heightLabel(value: unknown) {
+  const height = publicDetail(value, 30);
+  return height && /^\d{3}$/.test(height) ? `${height}公分` : height;
+}
+
+function cupLabel(value: unknown) {
+  const cup = publicDetail(value, 30);
+  return cup && !/罩杯$/i.test(cup) ? `${cup}罩杯` : cup;
+}
+
 function validSourceUrl(value: string) {
   try {
     const url = new URL(value);
@@ -303,8 +327,16 @@ export async function POST(request: Request) {
         result.unchanged += 1;
         continue;
       }
-      const seoTitle = `${profile.cityName}${profile.details.serviceMethod || "形象資訊"}｜${profile.displayName}`;
-      const seoDescription = `${profile.cityName}${profile.details.serviceMethod || "成人形象"}資訊｜${profile.displayName}${profile.details.age ? `，${profile.details.age}` : ""}${profile.details.height ? `、${profile.details.height}` : ""}${profile.details.cup ? `、${profile.details.cup}罩杯` : ""}。查看公開照片、服務地區與聯絡前須知。`;
+      const serviceMethod = publicDetail(profile.details.serviceMethod, 60) || "成人形象";
+      const titleTraits = [
+        publicDetail(profile.details.serviceArea, 60),
+        heightLabel(profile.details.height),
+        cupLabel(profile.details.cup),
+        publicDetail(profile.details.price, 60),
+      ].filter(Boolean);
+      const descriptionTraits = [ageLabel(profile.details.age), heightLabel(profile.details.height), cupLabel(profile.details.cup), publicDetail(profile.details.price, 60)].filter(Boolean);
+      const seoTitle = `${profile.cityName}${serviceMethod}｜${profile.displayName}${titleTraits.length ? `｜${titleTraits.join("・")}` : ""}`;
+      const seoDescription = `${profile.cityName}${serviceMethod}資訊｜${profile.displayName}${descriptionTraits.length ? `，${descriptionTraits.join("、")}` : ""}。查看公開照片、服務地區與聯絡前須知。`;
       const payload = {
         slug: current?.slug || `source-${profile.sourceKey}`,
         display_name: profile.displayName,
@@ -363,3 +395,4 @@ export async function POST(request: Request) {
   }
   return NextResponse.json({ ok: result.errors.length === 0, mode, summary, result }, { status: result.errors.length ? 207 : 200 });
 }
+

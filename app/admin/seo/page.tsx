@@ -13,7 +13,7 @@ type Issue<T> = { item: T; reason: string; value?: string };
 function clean(value: string | null | undefined) { return (value ?? "").trim(); }
 function fingerprint(value: string | null | undefined) { return clean(value).normalize("NFKC").toLocaleLowerCase("zh-Hant").replace(/[\s｜|・·,，。!！?？:：;；/／\-–—_()（）【】「」『』]/g, ""); }
 function duplicateGroups<T>(items: T[], valueOf: (item: T) => string | null) { const groups = new Map<string, T[]>(); for (const item of items) { const value = fingerprint(valueOf(item)); if (!value) continue; groups.set(value, [...(groups.get(value) ?? []), item]); } return [...groups.values()].filter((group) => group.length > 1).sort((a, b) => b.length - a.length); }
-function textReason(value: string | null | undefined) { const text = clean(value); if (!text) return ""; if (/\b(secret|undefined|null)\b/i.test(text)) return "含有不應出現的英文或程式文字"; if (/度假度假/.test(text)) return "含有重複詞「度假度假」"; if (/^整收錄/.test(text)) return "疑似錯字「整收錄」"; if (/�/.test(text)) return "含有亂碼字元"; return ""; }
+function textReason(value: string | null | undefined) { const text = clean(value); if (!text) return ""; if (/\b(secret|undefined|null)\b/i.test(text) || /\{(?:age|weight|servicemodel|notaccept|jiajiaxiangmu|scheme)\}/i.test(text)) return "含有不應出現的英文或程式預留文字"; if (/(?:&#\d+;|&(?:ndash|mdash);)/i.test(text)) return "含有尚未轉換的 HTML 字元"; if (/(?:^|[，、\s])\?(?:[，、。\s]|$)/.test(text)) return "含有未知欄位問號，建議省略未提供的資料"; if (/度假度假/.test(text)) return "含有重複詞「度假度假」"; if (/^整收錄/.test(text)) return "疑似錯字「整收錄」"; if (/�/.test(text)) return "含有亂碼字元"; return ""; }
 function looksLikeKeywordList(value: string | null | undefined) { const text = clean(value); return text.split(/\s+/).length >= 7 && !/[，。！？；、,.!?;]/.test(text); }
 function flattenDuplicateIssues<T>(groups: T[][], valueOf: (item: T) => string | null) { return groups.flatMap((group, index) => group.map((item) => ({ item, reason: `重複群組 ${index + 1}`, value: clean(valueOf(item)) }))); }
 function settingObject(settings: Setting[], key: string) { const value = settings.find((item) => item.key === key)?.value; return value && typeof value === "object" ? value as Record<string, unknown> : {}; }
@@ -64,6 +64,12 @@ export default async function AdminSeoPage() {
   const incompleteCategories: Issue<Category>[] = categories.filter((item) => item.published && (!clean(item.seo_title) || !clean(item.seo_description))).map((item) => ({ item, reason: !clean(item.seo_title) ? "缺少 SEO 標題" : "缺少 SEO 描述" }));
   const incompleteCities: Issue<City>[] = cities.filter((item) => item.published && regionIds.has(item.region_id) && (!clean(item.summary) || !clean(item.seo_title) || !clean(item.seo_description))).map((item) => ({ item, reason: !clean(item.summary) ? "缺少城市介紹" : !clean(item.seo_title) ? "缺少 SEO 標題" : "缺少 SEO 描述" }));
   const orphanCities: Issue<City>[] = cities.filter((item) => !regionIds.has(item.region_id)).map((item) => ({ item, reason: `所屬專區不存在（${item.region_id}）` }));
+  const thinCities: Issue<City>[] = cities.filter((item) => item.published && regionIds.has(item.region_id)).flatMap((item) => {
+    const issues: Issue<City>[] = [];
+    if (clean(item.summary).length > 0 && clean(item.summary).length < 80) issues.push({ item, reason: "城市介紹少於 80 字，建議補充地區特色、預約方式與安全提醒", value: clean(item.summary) });
+    if (clean(item.seo_description).length > 0 && clean(item.seo_description).length < 35) issues.push({ item, reason: "城市 SEO 描述過短，搜尋摘要辨識度不足", value: clean(item.seo_description) });
+    return issues;
+  });
 
   const textIssues: Array<Issue<Profile | Article | Category | City> & { href: string; label: string }> = [];
   for (const item of profiles) for (const value of [item.seo_title, item.seo_description]) { const reason = textReason(value); if (reason) textIssues.push({ item, reason, value: clean(value), href: `/admin/profiles/${item.id}/edit`, label: item.display_name }); }
@@ -85,7 +91,7 @@ export default async function AdminSeoPage() {
 
   const duplicateCount = profileTitleDuplicates.length + profileDescriptionDuplicates.length + articleTitleDuplicates.length + articleDescriptionDuplicates.length + categoryTitleDuplicates.length + cityTitleDuplicates.length;
   const incompleteCount = incompleteProfiles.length + incompleteArticles.length + incompleteCategories.length + incompleteCities.length + defaultSeoIssues.length;
-  const qualityCount = textIssues.length + weakProfiles.length + categoryBrandIssues.length;
+  const qualityCount = textIssues.length + weakProfiles.length + categoryBrandIssues.length + thinCities.length;
   const issueCount = duplicateCount + incompleteCount + qualityCount + orphanCities.length;
 
   return <main className="admin-page admin-seo-page">
@@ -102,10 +108,11 @@ export default async function AdminSeoPage() {
     <SeoSection title="形象 SEO 重複" description="直接比較後台原始標題與描述，避免每位形象使用同一組關鍵字。" count={profileTitleDuplicates.length + profileDescriptionDuplicates.length}>{[...profileTitleDuplicates, ...profileDescriptionDuplicates].map((issue, index) => <IssueLink key={`${issue.item.id}-${index}`} href={`/admin/profiles/${issue.item.id}/edit`} label={issue.item.display_name} reason={issue.reason} value={issue.value} />)}</SeoSection>
     <SeoSection title="文章 SEO 重複" description="僅檢查已發布文章；每篇文章應有不同的搜尋主題與摘要。" count={articleTitleDuplicates.length + articleDescriptionDuplicates.length}>{[...articleTitleDuplicates, ...articleDescriptionDuplicates].map((issue, index) => <IssueLink key={`${issue.item.id}-${index}`} href={`/admin/articles/${issue.item.id}/edit`} label={issue.item.title} reason={issue.reason} value={issue.value} />)}</SeoSection>
     <SeoSection title="文章分類 SEO 問題" description="分類頁不得重複品牌名稱，也應避免彼此使用相同標題。" count={categoryBrandIssues.length + categoryTitleDuplicates.length + incompleteCategories.length}>{[...categoryBrandIssues, ...categoryTitleDuplicates, ...incompleteCategories].map((issue, index) => <IssueLink key={`${issue.item.id}-${index}`} href="/admin/settings#article-categories" label={issue.item.name} reason={issue.reason} value={issue.value} />)}</SeoSection>
-    <SeoSection title="城市資料問題" description="檢查城市內容缺漏、標題重複及所屬專區已不存在的舊資料。" count={incompleteCities.length + cityTitleDuplicates.length + orphanCities.length}>{[...incompleteCities, ...cityTitleDuplicates].map((issue, index) => <IssueLink key={`${issue.item.id}-${index}`} href={`/admin/regions/${issue.item.region_id}/edit`} label={issue.item.name} reason={issue.reason} value={issue.value} />)}{orphanCities.map((issue) => <IssueLink key={issue.item.id} href="/admin/regions" label={issue.item.name} reason={issue.reason} value={`網址代稱：${issue.item.slug}`} />)}</SeoSection>
+    <SeoSection title="城市資料問題" description="檢查城市內容缺漏、內容過薄、標題重複及所屬專區已不存在的舊資料。" count={incompleteCities.length + thinCities.length + cityTitleDuplicates.length + orphanCities.length}>{[...incompleteCities, ...thinCities, ...cityTitleDuplicates].map((issue, index) => <IssueLink key={`${issue.item.id}-${index}`} href={`/admin/regions/${issue.item.region_id}/edit`} label={issue.item.name} reason={issue.reason} value={issue.value} />)}{orphanCities.map((issue) => <IssueLink key={issue.item.id} href="/admin/regions" label={issue.item.name} reason={issue.reason} value={`網址代稱：${issue.item.slug}`} />)}</SeoSection>
     <SeoSection title="SEO 欄位缺漏" description="已發布形象、文章與全站預設設定都應具有 SEO 標題及描述。" count={incompleteProfiles.length + incompleteArticles.length + defaultSeoIssues.length}>{incompleteProfiles.map((issue) => <IssueLink key={issue.item.id} href={`/admin/profiles/${issue.item.id}/edit`} label={issue.item.display_name} reason={issue.reason} />)}{incompleteArticles.map((issue) => <IssueLink key={issue.item.id} href={`/admin/articles/${issue.item.id}/edit`} label={issue.item.title} reason={issue.reason} />)}{defaultSeoIssues.map((reason) => <IssueLink key={reason} href="/admin/settings" label="全站預設 SEO" reason={reason} />)}</SeoSection>
   </main>;
 }
 
 function IssueLink({ href, label, reason, value }: { href: string; label: string; reason: string; value?: string }) { return <Link href={href}><span><strong>{label}</strong><small>{reason}{value ? ` · ${value}` : ""}</small></span><b>前往處理 →</b></Link>; }
 function SeoSection({ title, description, count, children }: { title: string; description: string; count: number; children: React.ReactNode }) { return <details className="seo-health-section" open={count > 0}><summary><span><strong>{title}</strong><small>{description}</small></span><i>{count}</i></summary><div className="seo-health-list">{count ? children : <p>目前沒有發現這類問題。</p>}</div></details>; }
+

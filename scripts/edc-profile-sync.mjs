@@ -37,8 +37,15 @@ function decodeHtml(value = "") {
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/&lt;/gi, "<")
     .replace(/&gt;/gi, ">")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function sourceValue(value = "") {
+  const normalized = decodeHtml(String(value)).trim();
+  return /^(?:\?|[-–—]+|n\/?a|null|undefined|unknown|未知|不詳|未填|\{[^}]+\})$/i.test(normalized) ? "" : normalized;
 }
 
 function field(text, label, nextLabels) {
@@ -73,7 +80,7 @@ function priceText(prices) {
 function normalizeProduct(product) {
   const city = cityName(product);
   const text = decodeHtml(product.description || "");
-  const age = field(text, "年齡", ["身高", "體重", "罩杯", "類型"]);
+  const age = sourceValue(field(text, "年齡", ["身高", "體重", "罩杯", "類型"]));
   const serviceMethod = attribute(product, "服務方式") || field(text, "類型", ["地區", "模式", "可配合"]);
   const displayName = decodeHtml(product.name || "").replace(/^.*?[-–—]\s*/, "").trim();
   if (!product.id || !product.permalink || !displayName || !city) return null;
@@ -82,19 +89,19 @@ function normalizeProduct(product) {
     sourceUrl: product.permalink,
     displayName,
     cityName: city,
-    nationality: attribute(product, "國籍") || field(text, "國家", ["年齡"]),
+    nationality: sourceValue(attribute(product, "國籍") || field(text, "國家", ["年齡"])),
     age,
-    height: attribute(product, "身高") || field(text, "身高", ["體重", "罩杯"]),
-    weight: field(text, "體重", ["罩杯", "類型"]),
-    cup: attribute(product, "罩杯") || field(text, "罩杯", ["類型", "地區"]),
-    environment: field(text, "模式", ["可配合", "不接受"]),
-    serviceMethod,
+    height: sourceValue(attribute(product, "身高") || field(text, "身高", ["體重", "罩杯"])),
+    weight: sourceValue(field(text, "體重", ["罩杯", "類型"])),
+    cup: sourceValue(attribute(product, "罩杯") || field(text, "罩杯", ["類型", "地區"])),
+    environment: sourceValue(field(text, "模式", ["可配合", "不接受"])),
+    serviceMethod: sourceValue(serviceMethod),
     price: priceText(product.prices),
-    serviceArea: attribute(product, "服務地區") || field(text, "地區", ["模式", "可配合"]),
-    compatible: attribute(product, "服務內容") || field(text, "可配合", ["不接受", "加價購", "優惠方案"]),
-    notAccepted: field(text, "不接受", ["加價購", "優惠方案"]),
-    surcharge: field(text, "加價購", ["優惠方案"]),
-    promotion: field(text, "優惠方案", []),
+    serviceArea: sourceValue(attribute(product, "服務地區") || field(text, "地區", ["模式", "可配合"])),
+    compatible: sourceValue(attribute(product, "服務內容") || field(text, "可配合", ["不接受", "加價購", "優惠方案"])),
+    notAccepted: sourceValue(field(text, "不接受", ["加價購", "優惠方案"])),
+    surcharge: sourceValue(field(text, "加價購", ["優惠方案"])),
+    promotion: sourceValue(field(text, "優惠方案", [])),
     images: (product.images || []).slice(0, 3).map((image) => ({
       url: image.thumbnail || image.src,
       alt: decodeHtml(image.alt || image.name || `${city}${serviceMethod} ${displayName}`),
@@ -235,3 +242,4 @@ if (process.env.PROFILE_SYNC_ENDPOINT && process.env.PROFILE_SYNC_SECRET) {
 } else {
   console.log("尚未設定 PROFILE_SYNC_ENDPOINT / PROFILE_SYNC_SECRET，因此只建立本機預覽，不會修改正式網站。 ");
 }
+
