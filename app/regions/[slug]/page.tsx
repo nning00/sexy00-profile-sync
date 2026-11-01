@@ -91,7 +91,10 @@ export default async function RegionPage({ params }: { params: Promise<{ slug: s
     <header className="detail-header">
       <MobileMenu />
       <Link className="brand" href="/"><BrandMark /><span>{settings.brand.name}</span></Link>
-      <Link href="/">返回首頁</Link>
+      <div className="detail-header-actions">
+        <Link className="detail-back-link" href="/">返回首頁</Link>
+        <a className="nav-cta detail-line-cta" href={settings.brand.line_url} target="_blank" rel="noopener noreferrer">{settings.navigation.line_cta}</a>
+      </div>
     </header>
     <RegionNav />
     <section className="region-hero">
@@ -120,3 +123,4 @@ export default async function RegionPage({ params }: { params: Promise<{ slug: s
     </section>
   </main>;
 }
+

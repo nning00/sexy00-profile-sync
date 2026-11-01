@@ -114,7 +114,10 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
       <header className="detail-header">
         <MobileMenu />
         <Link className="brand" href="/"><BrandMark /><span>{settings.brand.name}</span></Link>
-        <Link href="/#gallery">返回形象列表</Link>
+        <div className="detail-header-actions">
+          <Link className="detail-back-link" href="/#gallery">返回形象列表</Link>
+          <a className="nav-cta detail-line-cta" href={settings.brand.line_url} target="_blank" rel="noopener noreferrer">{settings.navigation.line_cta}</a>
+        </div>
       </header>
       <RegionNav />
       <section className="profile-detail-hero">
@@ -151,3 +154,4 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
     </main>
   );
 }
+

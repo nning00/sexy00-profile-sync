@@ -95,7 +95,10 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
       <header className="detail-header">
         <MobileMenu />
         <Link className="brand" href="/"><BrandMark /><span>{settings.brand.name}</span></Link>
-        <Link href="/#services">所有服務</Link>
+        <div className="detail-header-actions">
+          <Link className="detail-back-link" href="/#services">所有服務</Link>
+          <a className="nav-cta detail-line-cta" href={settings.brand.line_url} target="_blank" rel="noopener noreferrer">{settings.navigation.line_cta}</a>
+        </div>
       </header>
       <RegionNav />
       <section className="detail-hero">
@@ -111,3 +114,4 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
     </main>
   );
 }
+

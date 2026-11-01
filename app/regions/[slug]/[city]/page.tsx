@@ -141,7 +141,10 @@ export default async function CityPage({ params }: { params: Promise<{ slug: str
       <header className="detail-header">
         <MobileMenu />
         <Link className="brand" href="/"><BrandMark /><span>{settings.brand.name}</span></Link>
-        <Link href={`/regions/${region.slug}/overview`}>返回{region.name}</Link>
+        <div className="detail-header-actions">
+          <Link className="detail-back-link" href={`/regions/${region.slug}/overview`}>返回{region.name}</Link>
+          <a className="nav-cta detail-line-cta" href={settings.brand.line_url} target="_blank" rel="noopener noreferrer">{settings.navigation.line_cta}</a>
+        </div>
       </header>
       <RegionNav />
 
@@ -198,3 +201,4 @@ export default async function CityPage({ params }: { params: Promise<{ slug: str
     </main>
   );
 }
+
