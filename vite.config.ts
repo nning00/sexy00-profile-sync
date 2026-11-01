@@ -3,7 +3,6 @@ import { defineConfig } from "vite";
 
 const workerConfig = {
   main: "./worker/index.ts",
-  compatibility_flags: ["nodejs_compat"],
 };
 
 export default defineConfig(async () => {
@@ -19,3 +18,4 @@ export default defineConfig(async () => {
     ],
   };
 });
+
