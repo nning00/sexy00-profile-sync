@@ -3,7 +3,9 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { LONG_IMAGE_CACHE_SECONDS, prepareImageForUpload } from "@/lib/image-upload";
 import { refreshPublicContent } from "@/lib/refresh-public-content";
+import { scopedMediaPath } from "@/lib/site-instance";
 
 type City = {
   id?: string;
@@ -18,7 +20,7 @@ type City = {
   sort_order: number;
   published: boolean;
 };
-type Region = { id: string; name: string; slug: string; english_name: string | null; summary: string | null; sort_order: number; published: boolean };
+type Region = { id: string; name: string; slug: string; english_name: string | null; summary: string | null; image_path: string | null; sort_order: number; published: boolean };
 
 export default function RegionEditor({ region, initialCities }: { region: Region; initialCities: City[] }) {
   const router = useRouter();
@@ -31,9 +33,23 @@ export default function RegionEditor({ region, initialCities }: { region: Region
     event.preventDefault(); setSaving(true); setMessage("");
     try {
     const form = new FormData(event.currentTarget); const supabase = createClient();
+    let imagePath = form.get("remove_region_image") === "on" ? null : region.image_path;
+    const imageFile = form.get("region_image") as File;
+    if (imageFile?.size) {
+      const prepared = await prepareImageForUpload(imageFile);
+      const path = scopedMediaPath(`regions/${region.slug}/${crypto.randomUUID()}.${prepared.extension}`);
+      const { error: uploadError } = await supabase.storage.from("site-media").upload(path, prepared.file, {
+        upsert: false,
+        contentType: prepared.file.type,
+        cacheControl: LONG_IMAGE_CACHE_SECONDS,
+      });
+      if (uploadError) { setMessage(`專區封面上傳失敗：${uploadError.message}`); setSaving(false); return; }
+      imagePath = path;
+    }
     const { error } = await supabase.from("regions").update({
       name: String(form.get("name") ?? "").trim(), slug: String(form.get("slug") ?? "").trim(),
       english_name: String(form.get("english_name") ?? "").trim(), summary: String(form.get("summary") ?? "").trim(),
+      image_path: imagePath,
       sort_order: Number(form.get("sort_order") ?? 0), published: form.get("published") === "on",
     }).eq("id", region.id);
     if (error) { setMessage(`儲存失敗：${error.message}`); setSaving(false); return; }
@@ -72,6 +88,14 @@ export default function RegionEditor({ region, initialCities }: { region: Region
     <div className="admin-form-grid"><label>專區顯示名稱<input name="name" required defaultValue={region.name} /></label><label>網址代稱<input name="slug" required pattern="[a-z0-9-]+" defaultValue={region.slug} /></label></div>
     <div className="admin-form-grid"><label>英文名稱<input name="english_name" defaultValue={region.english_name ?? ""} /></label><label>排序<input name="sort_order" type="number" defaultValue={region.sort_order} /></label></div>
     <label>專區介紹<textarea name="summary" rows={4} defaultValue={region.summary ?? ""} /></label>
+    <fieldset className="admin-gallery-editor admin-article-media-editor">
+      <legend>專區封面圖片</legend>
+      <p className="admin-media-help">此圖片只會顯示在本專區首頁。未設定時會沿用首頁主圖；上傳時會自動壓縮成適合網站的尺寸。</p>
+      <label>更換{region.name}封面照<input name="region_image" type="file" accept="image/jpeg,image/png,image/webp" /></label>
+      {region.image_path && !region.image_path.startsWith("/placeholders/")
+        ? <div className="admin-current-media"><p className="admin-current-file">目前封面：{region.image_path}</p><label><input type="checkbox" name="remove_region_image" /> 儲存時移除，改回首頁主圖</label></div>
+        : <p className="admin-current-file">目前尚未設定獨立封面，前台沿用首頁主圖。</p>}
+    </fieldset>
     <label className="admin-inline-check"><input type="checkbox" name="published" defaultChecked={region.published} /> 顯示此專區</label>
     <section className="admin-city-editor"><div><div><h2>城市獨立內容與 SEO</h2><p>展開城市後，可分別修改前台文字與搜尋結果標題。網址代稱上線後請勿任意更改。</p></div><button type="button" onClick={() => setCities([...cities, { name: "", slug: "", page_title: "", summary: "", gallery_title: "", gallery_description: "", seo_title: "", seo_description: "", sort_order: cities.length, published: true }])}>＋ 新增城市</button></div>
       {cities.map((city, index) => <details className="admin-city-content-card" key={city.id ?? `new-${index}`} open={index === 0}>
@@ -103,3 +127,4 @@ export default function RegionEditor({ region, initialCities }: { region: Region
     <button className="button primary" disabled={saving}>{saving ? "儲存中…" : "儲存專區與選單"}</button>
   </form>;
 }
+

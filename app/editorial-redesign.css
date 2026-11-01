@@ -343,6 +343,8 @@ p, li { text-wrap: pretty; }
 .article-related-grid > a:hover, .article-context-links a:hover, .city-guide-links > a:hover, .city-article-links a:hover { color: var(--editorial-accent); background: var(--editorial-sky); transform: translateY(-2px); }
 .region-hero { background: var(--editorial-mint); border: 0; border-radius: 16px; box-shadow: none; }
 .region-hero-image { border-radius: 16px 0 0 16px; }
+.region-page .section > .section-heading { max-width: 760px; margin-left: auto; margin-right: auto; text-align: center; }
+.region-page .section > .section-heading > p:last-child { max-width: 640px; margin-left: auto; margin-right: auto; text-wrap: pretty; }
 .region-rules, .city-seo, .profile-description { background: var(--editorial-mint); border: 0; border-radius: 16px; box-shadow: none; }
 .city-card { background: var(--editorial-sky); }
 .city-card:nth-child(even) { background: var(--editorial-mint); }

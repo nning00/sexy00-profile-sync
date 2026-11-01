@@ -29,7 +29,7 @@ export default async function AdminRegionsPage() {
     <div className="admin-subheader"><div><Link href="/admin">← 後台首頁</Link><h1>地區版面管理</h1><p>城市形象數量不設上限；可在此查看、編輯或繼續新增。</p></div></div>
     {!regionData?.length ? <section className="admin-empty-setup"><h2>先建立台灣地區資料</h2><p>只需執行一次，系統會建立北部、中部、南部、東部外島及全台專區。</p><form action={initializeRegions}><button className="button primary" type="submit">建立地區資料</button></form></section> :
       <div className="admin-region-list">{regionData.map((region) => <section key={region.id} className="admin-region-group">
-        <div className="admin-region-title"><h2>{region.name}</h2><Link href={`/admin/regions/${region.id}/edit`}>修改專區、城市內容與 SEO →</Link></div>
+        <div className="admin-region-title"><h2>{region.name}</h2><Link href={`/admin/regions/${region.id}/edit`}>修改專區封面、城市內容與 SEO →</Link></div>
         {[...(region.cities ?? [])].sort((a, b) => a.sort_order - b.sort_order).map((city) => {
           const profiles = [...(byCity.get(city.id) ?? [])].sort((a, b) => a.sort_order - b.sort_order || a.display_name.localeCompare(b.display_name, "zh-Hant"));
           const nextOrder = Math.max(0, ...profiles.map((profile) => profile.sort_order || 0)) + 1;
@@ -42,3 +42,4 @@ export default async function AdminRegionsPage() {
       </section>)}</div>}
   </main>;
 }
+
