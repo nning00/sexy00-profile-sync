@@ -408,7 +408,7 @@ p, li { text-wrap: pretty; }
   .home-page .gallery-item.item-4,
   .home-page .gallery-item.item-5,
   .home-page .gallery-item.item-6 { margin-bottom: 8px; border-radius: 8px; }
-  .home-page .service-card, .home-page .service-card:not(:first-child) { min-height: 0; display: grid; grid-template-columns: minmax(120px, 2fr) minmax(0, 3fr); }
+  .home-page .service-card, .home-page .service-card:first-child, .home-page .service-card:not(:first-child) { min-height: 0; display: grid; grid-template-columns: minmax(120px, 2fr) minmax(0, 3fr); }
   .home-page .services > .section-heading { display: block; margin-bottom: 32px; }
   .home-page .services > .section-heading > p { margin-top: 16px; }
   .home-page .service-image, .home-page .service-card:first-child .service-image, .home-page .service-card:not(:first-child) .service-image { height: auto; min-height: 200px; margin: 8px; }
