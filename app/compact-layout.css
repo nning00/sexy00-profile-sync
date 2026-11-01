@@ -205,9 +205,9 @@
 
 /* Keep the journal description readable over the light pastel background.
    This final layer intentionally wins over the legacy white text rule. */
-.home-page .gallery-heading > p {
-  color: var(--teal-deep);
-  opacity: 1;
+.home-page .gallery-section .gallery-heading > p:last-child {
+  color: var(--teal-deep) !important;
+  opacity: 1 !important;
 }
 
 .home-page .home-articles-action,
@@ -798,6 +798,14 @@
 
   .home-page .service-grid {
     gap: 11px;
+  }
+
+  .home-page .service-card,
+  .home-page .service-card:hover,
+  .home-page .service-card:nth-child(3n + 2),
+  .home-page .service-card:nth-child(3n + 2):hover,
+  .home-page .service-card:hover .service-image img {
+    transform: none !important;
   }
 
   .home-page .service-image {
