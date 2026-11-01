@@ -178,7 +178,7 @@
 .home-page .promise {
   width: min(1160px, calc(100% - 32px));
   min-height: 530px;
-  margin: 24px auto 62px;
+  margin: 24px auto 18px;
 }
 
 .home-page .promise-copy {
@@ -197,6 +197,17 @@
 .home-page .promise-copy li {
   padding: 14px 0;
   gap: 16px;
+}
+
+.home-page .home-articles {
+  padding-top: 46px;
+}
+
+/* Keep the journal description readable over the light pastel background.
+   This final layer intentionally wins over the legacy white text rule. */
+.home-page .gallery-heading > p {
+  color: var(--teal-deep);
+  opacity: 1;
 }
 
 .home-page .home-articles-action,
@@ -805,7 +816,7 @@
   .home-page .promise {
     width: calc(100% - 20px);
     min-height: 0;
-    margin: 14px auto 46px;
+    margin: 14px auto 8px;
   }
 
   .home-page .promise-image {
@@ -823,6 +834,10 @@
 
   .home-page .promise-copy li {
     padding: 11px 0;
+  }
+
+  .home-page .home-articles {
+    padding-top: 28px;
   }
 
   .home-page .faq-list summary {
@@ -1057,6 +1072,22 @@
 
   .profile-carousel-stage {
     height: clamp(360px, 58vh, 480px);
+  }
+}
+
+/* Touch devices can leave :hover active while a page is being swiped. Keep
+   the three service choices anchored so cards and photos never jump around. */
+@media (hover: none), (pointer: coarse) {
+  .home-page .service-card,
+  .home-page .service-card:hover,
+  .home-page .service-card:nth-child(3n + 2),
+  .home-page .service-card:nth-child(3n + 2):hover,
+  .home-page .service-card:hover .service-image img {
+    transform: none !important;
+  }
+
+  .home-page .service-card {
+    touch-action: pan-y;
   }
 }
 
