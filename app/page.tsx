@@ -39,6 +39,7 @@ export default async function Home() {
   }));
   const heroDesktop = optimizedMediaUrl(mediaUrl(settings.homepage.hero_image), 1600, 84);
   const heroMobile = optimizedMediaUrl(mediaUrl(settings.homepage.hero_image_mobile), 800, 82);
+  const contactTitleBreak = settings.homepage.contact_title.indexOf("開始約會");
   return (
     <main className="home-page">
       <JsonLd data={faqStructuredData} />
@@ -194,7 +195,15 @@ export default async function Home() {
       </section>
 
       <section className="contact section" id="contact">
-        <h2>{settings.homepage.contact_title}</h2>
+        <h2>
+          {contactTitleBreak > 0 ? (
+            <>
+              {settings.homepage.contact_title.slice(0, contactTitleBreak)}
+              <br />
+              {settings.homepage.contact_title.slice(contactTitleBreak)}
+            </>
+          ) : settings.homepage.contact_title}
+        </h2>
         <p>{settings.homepage.contact_text}</p>
         <a className="button primary" href={settings.brand.line_url} target="_blank" rel="noopener noreferrer">{content.labels.line_cta}</a>
       </section>

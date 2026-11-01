@@ -90,6 +90,19 @@ p, li { text-wrap: pretty; }
   font-size: 14px;
   font-weight: 600;
 }
+.site-header .nav-cta {
+  min-width: 104px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
 .nav-cta:hover, .button.primary:hover { color: white; background: #7d3153; border-color: #7d3153; transform: translateY(-2px); }
 .button.secondary { min-height: 44px; padding: 8px 16px; color: var(--editorial-accent); background: transparent; border: 1px solid var(--editorial-accent); border-radius: 8px; font-weight: 600; }
 .button.secondary:hover { color: white; background: var(--editorial-accent); border-color: var(--editorial-accent); }
@@ -163,7 +176,7 @@ p, li { text-wrap: pretty; }
 .home-page .quick-regions a { color: var(--editorial-muted); background: transparent; border: 0; border-left: 1px solid var(--editorial-line); font-weight: 500; }
 .home-page .quick-regions a:hover { color: var(--editorial-accent); background: transparent; }
 
-.home-page .section { padding: 80px 32px 96px; }
+.home-page .section { padding: 64px 32px 72px; }
 .home-page .section-heading, .home-page .gallery-heading { max-width: 760px; margin: 0 0 48px; text-align: left; }
 .home-page .section-heading h2, .home-page .gallery-heading h2 { font-size: clamp(36px, 4vw, 48px); line-height: 1.2; letter-spacing: -.03em; font-weight: 600; }
 .home-page .section-heading > p:last-child, .home-page .gallery-heading > p:last-child { max-width: 640px; margin-top: 16px; color: var(--editorial-muted) !important; font-size: 16px; line-height: 1.75; opacity: 1 !important; }
@@ -237,9 +250,9 @@ p, li { text-wrap: pretty; }
 .home-page .faq-list summary strong { font-size: 16px; font-weight: 600; }
 .home-page .faq-list details > p { margin: 0 28px 24px 0; color: var(--editorial-muted); }
 
-.home-page .contact { width: min(1120px, calc(100% - 32px)); margin: 64px auto 80px; padding: 64px 32px 80px; color: var(--editorial-dark); background: var(--editorial-butter); border: 0; border-radius: 16px; }
+.home-page .contact { width: min(1120px, calc(100% - 32px)); margin: 40px auto 48px; padding: 48px 32px 56px; color: var(--editorial-dark); background: var(--editorial-butter); border: 0; border-radius: 16px; }
 .home-page .contact::before, .home-page .contact::after { display: none; }
-.home-page .contact h2 { font-size: 48px; font-weight: 600; }
+.home-page .contact h2 { font-size: 48px; line-height: 1.18; letter-spacing: -.02em; font-weight: 600; }
 
 /* Secondary pages use the same calmer surfaces and type rhythm. */
 .article-center, .article-page, .region-page, .city-page, .detail-page, .profile-detail-page, .guide-index, .guide-page, .legal-page { background: var(--editorial-bg); }
@@ -292,6 +305,7 @@ p, li { text-wrap: pretty; }
   .drawer-tabs button.active { color: var(--editorial-dark); background: var(--editorial-bg); border-bottom-color: var(--editorial-accent); }
   .drawer-region-group h2 { color: var(--editorial-accent); background: var(--editorial-mint); }
   .detail-header { height: 64px; background: rgba(255,254,248,.96); border-bottom: 1px solid var(--editorial-line); }
+  .site-header .nav-cta { min-width: 96px; padding: 0 12px; font-size: 13px; }
 }
 
 @media (max-width: 700px) {
@@ -303,7 +317,10 @@ p, li { text-wrap: pretty; }
   .home-page .hero-actions { align-items: stretch; }
   .home-page .hero-actions .button { width: auto; }
   .home-page .quick-regions { width: calc(100% - 32px); margin: 0 16px; overflow-x: auto; }
-  .home-page .section { padding: 64px 16px 80px; }
+  .home-page .section { padding: 48px 16px 56px; }
+  .home-page .intro { padding-bottom: 32px; }
+  .home-page .gallery-section { padding-top: 40px; }
+  .home-page .services { padding-bottom: 32px; }
   .home-page .section-heading, .home-page .gallery-heading { margin-bottom: 32px; }
   .home-page .section-heading h2, .home-page .gallery-heading h2 { font-size: 36px; }
   .home-page .intro { display: block; }
@@ -329,11 +346,12 @@ p, li { text-wrap: pretty; }
   .home-page .promise-image { min-height: 360px; border-radius: 16px 16px 0 0; }
   .home-page .promise-copy { min-height: 0; padding: 40px 24px 48px; }
   .home-page .promise-copy h2 { font-size: 36px; }
-  .home-page .home-articles { padding-top: 48px; }
+  .home-page .home-articles { padding-top: 32px; padding-bottom: 32px; }
   .home-page .home-articles .article-center-card, .home-page .home-articles .article-center-card:nth-child(2), .home-page .home-articles .article-center-card:nth-child(3) { display: block; }
   .home-page .home-articles .article-center-card-image, .home-page .home-articles .article-center-card:first-child .article-center-card-image { min-height: 260px; }
   .home-page .faq-list { grid-template-columns: 1fr; }
-  .home-page .contact { margin-top: 48px; margin-bottom: 64px; padding: 48px 24px 64px; border-radius: 16px; text-align: left; }
+  .home-page .faq { padding-top: 32px; padding-bottom: 40px; }
+  .home-page .contact { margin-top: 24px; margin-bottom: 32px; padding: 40px 24px 48px; border-radius: 16px; text-align: left; }
   .home-page .contact h2 { font-size: 36px; }
   .home-page .contact .button { width: auto; }
   .article-center-grid { grid-template-columns: 1fr; }
@@ -349,9 +367,19 @@ p, li { text-wrap: pretty; }
   .home-page .hero-actions { flex-direction: column; }
   .home-page .service-card, .home-page .service-card:not(:first-child) { grid-template-columns: 40% 60%; }
   .home-page .service-image, .home-page .service-card:not(:first-child) .service-image { min-height: 180px; }
-  .home-page .service-body { padding: 16px 12px 16px 4px; }
-  .home-page .service-card h3 { font-size: 18px; }
-  .home-page .service-card p { display: none; }
+  .home-page .service-body { padding: 16px 12px 16px 8px; justify-content: center; gap: 8px; }
+  .home-page .service-card h3 { margin-bottom: 0; font-size: 18px; }
+  .home-page .service-card p {
+    margin: 0;
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--editorial-muted);
+    font-size: 13px;
+    line-height: 1.55;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  .home-page .service-card a { margin-top: 2px; }
   .home-page .home-articles .article-center-card-image, .home-page .home-articles .article-center-card:first-child .article-center-card-image { min-height: 220px; }
 }
 
