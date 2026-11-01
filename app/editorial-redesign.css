@@ -48,7 +48,8 @@ p, li { text-wrap: pretty; }
   transition: transform 300ms var(--editorial-ease);
 }
 .skip-link:focus { transform: none; }
-.main-content-anchor, .page-top-sentinel { width: 1px; height: 1px; position: absolute; left: 0; top: 0; pointer-events: none; }
+.main-content-anchor { width: 1px; height: 1px; position: absolute; left: 0; top: 0; pointer-events: none; }
+.page-top-sentinel { width: 1px; height: 160px; position: absolute; left: 0; top: 0; pointer-events: none; }
 
 :where(a, button, summary, input, textarea, select):focus-visible {
   outline: 3px solid var(--editorial-accent);

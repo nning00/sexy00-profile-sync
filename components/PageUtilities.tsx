@@ -10,7 +10,8 @@ export default function PageUtilities() {
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
-    const observer = new IntersectionObserver(([entry]) => setVisible(!entry.isIntersecting), { rootMargin: "-160px 0px 0px 0px" });
+    setVisible(false);
+    const observer = new IntersectionObserver(([entry]) => setVisible(!entry.isIntersecting));
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [pathname]);
