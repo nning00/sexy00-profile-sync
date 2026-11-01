@@ -11,6 +11,7 @@ import "./globals.css";
 import "./sunrise.css";
 import "./pastel-finish.css";
 import "./compact-layout.css";
+import "./editorial-redesign.css";
 
 const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? "";
 const supabaseOrigin = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -92,6 +93,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body>
         <JsonLd data={structuredData} />
         <GoogleAnalytics measurementId={gaMeasurementId} />
+        <a className="skip-link" href="#main-content">跳到主要內容</a>
+        <span className="main-content-anchor" id="main-content" tabIndex={-1} />
         {children}
         <PageUtilities />
         <SiteFooter />
