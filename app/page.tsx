@@ -48,10 +48,10 @@ export default async function Home() {
       <AgeGate />
       <header className="site-header home-header">
         <MobileMenu />
-        <a className="brand" href="#top" aria-label={`${settings.brand.name}首頁`}>
+        <Link className="brand" href="/" aria-label={`${settings.brand.name}首頁`}>
           <BrandMark />
           <span>{settings.brand.name}</span>
-        </a>
+        </Link>
         <nav aria-label="主要選單">
           <a href="#about">{settings.navigation.about}</a>
           <a href="#services">{settings.navigation.services}</a>
