@@ -41,6 +41,7 @@ create table if not exists public.cities (
   gallery_description text,
   seo_title text,
   seo_description text,
+    faqs jsonb not null default '[]'::jsonb check (jsonb_typeof(faqs) = 'array'),
   unique(region_id, slug)
 );
 
@@ -186,3 +187,4 @@ alter table public.article_images disable row level security;
 alter table public.site_settings disable row level security;
 
 select 'schema-ready' as result;
+

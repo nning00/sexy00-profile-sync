@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { LONG_IMAGE_CACHE_SECONDS, prepareImageForUpload } from "@/lib/image-upload";
 import { refreshPublicContent } from "@/lib/refresh-public-content";
 import { scopedMediaPath } from "@/lib/site-instance";
+import { getCityFaqs, type CityFaq } from "@/data/city-seo-content";
 
 type City = {
   id?: string;
@@ -17,6 +18,7 @@ type City = {
   gallery_description: string | null;
   seo_title: string | null;
   seo_description: string | null;
+  faqs: CityFaq[] | null;
   sort_order: number;
   published: boolean;
 };
@@ -24,7 +26,10 @@ type Region = { id: string; name: string; slug: string; english_name: string | n
 
 export default function RegionEditor({ region, initialCities }: { region: Region; initialCities: City[] }) {
   const router = useRouter();
-  const [cities, setCities] = useState(initialCities);
+  const [cities, setCities] = useState(() => initialCities.map((city) => ({
+    ...city,
+    faqs: getCityFaqs(city.name, city.faqs),
+  })));
   const [removedCityIds, setRemovedCityIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -32,6 +37,12 @@ export default function RegionEditor({ region, initialCities }: { region: Region
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaving(true); setMessage("");
     try {
+    const invalidFaqCity = cities.find((city) => !city.faqs?.length || city.faqs.some((faq) => !faq.question.trim() || !faq.answer.trim()));
+    if (invalidFaqCity) {
+      setMessage(`${invalidFaqCity.name || "新城市"}的常見問題不能留白，且每個城市至少保留一題。`);
+      setSaving(false);
+      return;
+    }
     const form = new FormData(event.currentTarget); const supabase = createClient();
     let imagePath = form.get("remove_region_image") === "on" ? null : region.image_path;
     const imageFile = form.get("region_image") as File;
@@ -68,6 +79,7 @@ export default function RegionEditor({ region, initialCities }: { region: Region
         gallery_description: city.gallery_description?.trim() || `瀏覽${city.name.trim()}地區的成人形象介紹與公開資訊；實際內容與可安排情況，請透過正式聯絡方式確認。`,
         seo_title: city.seo_title?.trim() || `${city.name.trim()}成人形象介紹與預約諮詢`,
         seo_description: city.seo_description?.trim() || `查看${city.name.trim()}地區成人形象介紹、公開資訊與合法預約諮詢方式。重視成年人自願、隱私保護、清楚溝通與所在地法規。`,
+        faqs: (city.faqs ?? []).map((faq) => ({ question: faq.question.trim(), answer: faq.answer.trim() })),
         sort_order: city.sort_order || index,
         published: city.published,
       };
@@ -97,7 +109,7 @@ export default function RegionEditor({ region, initialCities }: { region: Region
         : <p className="admin-current-file">目前尚未設定獨立封面，前台沿用首頁主圖。</p>}
     </fieldset>
     <label className="admin-inline-check"><input type="checkbox" name="published" defaultChecked={region.published} /> 顯示此專區</label>
-    <section className="admin-city-editor"><div><div><h2>城市獨立內容與 SEO</h2><p>展開城市後，可分別修改前台文字與搜尋結果標題。網址代稱上線後請勿任意更改。</p></div><button type="button" onClick={() => setCities([...cities, { name: "", slug: "", page_title: "", summary: "", gallery_title: "", gallery_description: "", seo_title: "", seo_description: "", sort_order: cities.length, published: true }])}>＋ 新增城市</button></div>
+    <section className="admin-city-editor"><div><div><h2>城市獨立內容、FAQ 與 SEO</h2><p>展開城市後，可分別修改前台文字、常見問題與搜尋結果標題。網址代稱上線後請勿任意更改。</p></div><button type="button" onClick={() => setCities([...cities, { name: "", slug: "", page_title: "", summary: "", gallery_title: "", gallery_description: "", seo_title: "", seo_description: "", faqs: [], sort_order: cities.length, published: true }])}>＋ 新增城市</button></div>
       {cities.map((city, index) => <details className="admin-city-content-card" key={city.id ?? `new-${index}`} open={index === 0}>
         <summary><span><strong>{city.name || "新城市"}</strong><small>/{city.slug || "url"}</small></span><i>{city.published ? "前台顯示中" : "目前隱藏"}</i></summary>
         <div className="admin-city-content-inner">
@@ -119,6 +131,15 @@ export default function RegionEditor({ region, initialCities }: { region: Region
           <div className="admin-form-grid">
             <label>SEO 標題<input value={city.seo_title ?? ""} placeholder={`${city.name || "城市"}成人形象介紹與預約諮詢`} onChange={(event) => setCities(cities.map((item, itemIndex) => itemIndex === index ? { ...item, seo_title: event.target.value } : item))} /></label>
             <label>SEO 描述<textarea rows={4} value={city.seo_description ?? ""} onChange={(event) => setCities(cities.map((item, itemIndex) => itemIndex === index ? { ...item, seo_description: event.target.value } : item))} /></label>
+          </div>
+          <div className="admin-city-content-heading"><strong>④ 城市常見問題</strong><span>每個城市可設定不同的問題與答案，前台及 Google FAQ 資料會同步更新</span></div>
+          <div className="admin-city-faq-editor">
+            {(city.faqs ?? []).map((faq, faqIndex) => <div className="admin-repeat-row" key={`faq-${faqIndex}`}>
+              <label>問題 {faqIndex + 1}<input required value={faq.question} placeholder={`例如：${city.name || "此城市"}地區要如何詢問？`} onChange={(event) => setCities(cities.map((item, itemIndex) => itemIndex === index ? { ...item, faqs: (item.faqs ?? []).map((entry, entryIndex) => entryIndex === faqIndex ? { ...entry, question: event.target.value } : entry) } : item))} /></label>
+              <label>答案<textarea required rows={3} value={faq.answer} placeholder="請輸入完整且清楚的回答" onChange={(event) => setCities(cities.map((item, itemIndex) => itemIndex === index ? { ...item, faqs: (item.faqs ?? []).map((entry, entryIndex) => entryIndex === faqIndex ? { ...entry, answer: event.target.value } : entry) } : item))} /></label>
+              <button type="button" onClick={() => setCities(cities.map((item, itemIndex) => itemIndex === index ? { ...item, faqs: (item.faqs ?? []).filter((_, entryIndex) => entryIndex !== faqIndex) } : item))}>移除此題</button>
+            </div>)}
+            <button className="admin-add-button" type="button" onClick={() => setCities(cities.map((item, itemIndex) => itemIndex === index ? { ...item, faqs: [...(item.faqs ?? []), { question: "", answer: "" }] } : item))}>＋ 新增一個問題</button>
           </div>
           <button className="admin-city-delete" type="button" onClick={() => { if (city.id) setRemovedCityIds([...removedCityIds, city.id]); setCities(cities.filter((_, itemIndex) => itemIndex !== index)); }}>刪除此城市</button>
         </div>

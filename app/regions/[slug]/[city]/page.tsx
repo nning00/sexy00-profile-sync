@@ -26,7 +26,7 @@ const getLocation = unstable_cache(async (regionSlug: string, citySlug: string) 
   const supabase = createPublicClient();
   const loadRegion = () => supabase
       .from("regions")
-      .select("id,slug,name,english_name,summary,image_path,cities(slug,name,page_title,summary,gallery_title,gallery_description,seo_title,seo_description,published)")
+      .select("id,slug,name,english_name,summary,image_path,cities(slug,name,page_title,summary,gallery_title,gallery_description,seo_title,seo_description,faqs,published)")
       .eq("slug", regionSlug)
       .eq("published", true)
       .maybeSingle();
@@ -91,7 +91,7 @@ export default async function CityPage({ params }: { params: Promise<{ slug: str
   });
   const cityUrl = `/regions/${region.slug}/${city.slug}`;
   const localContent = getCitySeoContent(city.slug, city.name);
-  const cityFaqs = getCityFaqs(city.name);
+  const cityFaqs = getCityFaqs(city.name, city.faqs);
   const cityStructuredData = {
     "@context": "https://schema.org",
     "@graph": [

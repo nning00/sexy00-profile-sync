@@ -37,7 +37,7 @@ export function getCitySeoContent(slug: string, cityName: string): CitySeoConten
   };
 }
 
-export function getCityFaqs(cityName: string): CityFaq[] {
+function defaultCityFaqs(cityName: string): CityFaq[] {
   return [
     { question: `${cityName}地區要如何詢問？`, answer: `透過網站列出的正式 LINE，先提供${cityName}的大致區域、日期與方便聯絡的時段即可；不需要在第一次聯絡就提供敏感個資。` },
     { question: `頁面上的${cityName}形象都能立即安排嗎？`, answer: "頁面是公開資訊整理，不代表即時狀態。實際可安排情況、地點與時間都應以當次正式回覆為準。" },
@@ -45,3 +45,17 @@ export function getCityFaqs(cityName: string): CityFaq[] {
     { question: "網站上的資訊是否保證完全不變？", answer: "形象與地區資訊會依公開資料更新。出發前仍應再次確認，並以成年、自願、尊重隱私及遵守所在地法規為前提。" },
   ];
 }
+
+export function getCityFaqs(cityName: string, savedFaqs?: unknown): CityFaq[] {
+  if (Array.isArray(savedFaqs)) {
+    const validFaqs = savedFaqs.flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const question = "question" in item && typeof item.question === "string" ? item.question.trim() : "";
+      const answer = "answer" in item && typeof item.answer === "string" ? item.answer.trim() : "";
+      return question && answer ? [{ question, answer }] : [];
+    });
+    if (validFaqs.length) return validFaqs;
+  }
+  return defaultCityFaqs(cityName);
+}
+
