@@ -97,7 +97,7 @@ export default async function CityPage({ params }: { params: Promise<{ slug: str
     "@graph": [
       breadcrumbStructuredData([
         { name: "首頁", path: "/" },
-        { name: region.name, path: `/regions/${region.slug}/overview` },
+        { name: region.name, path: `/regions/${region.slug}` },
         { name: city.name, path: cityUrl },
       ]),
       {
@@ -142,7 +142,7 @@ export default async function CityPage({ params }: { params: Promise<{ slug: str
         <MobileMenu />
         <Link className="brand" href="/"><BrandMark /><span>{settings.brand.name}</span></Link>
         <div className="detail-header-actions">
-          <Link className="detail-back-link" href={`/regions/${region.slug}/overview`}>返回{region.name}</Link>
+          <Link className="detail-back-link" href={`/regions/${region.slug}`}>返回{region.name}</Link>
           <a className="nav-cta detail-line-cta" href={settings.brand.line_url} target="_blank" rel="noopener noreferrer">{settings.navigation.line_cta}</a>
         </div>
       </header>
@@ -150,7 +150,7 @@ export default async function CityPage({ params }: { params: Promise<{ slug: str
 
       <section className="profile-section section">
         <div className="section-heading">
-          <div className="article-breadcrumbs"><Link href="/">首頁</Link><span>/</span><Link href={`/regions/${region.slug}/overview`}>{region.name}</Link><span>/</span><strong>{city.name}</strong></div>
+          <div className="article-breadcrumbs"><Link href="/">首頁</Link><span>/</span><Link href={`/regions/${region.slug}`}>{region.name}</Link><span>/</span><strong>{city.name}</strong></div>
           <h1>{city.page_title || `${city.name}地區精選資訊`}</h1>
           <p>{city.gallery_description || `瀏覽${city.name}地區的成人形象介紹與公開資訊；實際內容與可安排情況，請透過正式聯絡方式確認。`}</p>
           <p className="city-profile-count">目前共整理 {profileTotal} 筆公開形象資訊；頁面數量不代表即時可安排。</p>
