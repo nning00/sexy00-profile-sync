@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 const BUCKET = "site-media";
 const PUBLIC_SIGNED_URL_SECONDS = 60 * 60;
 const ADMIN_SIGNED_URL_SECONDS = 5 * 60;
-const IMAGE_WIDTHS = new Set([64, 96, 128, 256, 320, 384, 480, 640, 750, 828, 960, 1080, 1200, 1600, 1920]);
+const IMAGE_WIDTHS = new Set([64, 96, 128, 256, 320, 384, 480, 640, 750, 828, 900, 960, 1080, 1200, 1600, 1920]);
 const IMAGE_QUALITIES = new Set([58, 62, 64, 75]);
 
 function validStoragePath(value: string | null) {
