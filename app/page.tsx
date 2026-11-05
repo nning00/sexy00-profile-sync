@@ -1,4 +1,4 @@
-import Image, { getImageProps } from "next/image";
+import Image from "next/image";
 import BrandMark from "@/components/BrandMark";
 import Link from "next/link";
 import AgeGate from "@/components/AgeGate";
@@ -18,6 +18,10 @@ const fallbackFaqs = [
   { question: "未滿 18 歲可以瀏覽或聯絡嗎？", answer: "不可以。本網站及相關諮詢僅限年滿 18 歲的成年人，未滿 18 歲請立即離開網站。" },
 ];
 
+function optimizedNextImageUrl(src: string, width: 1200 | 640, quality = 75) {
+  return `/_next/image?url=${encodeURIComponent(src)}&w=${width}&q=${quality}`;
+}
+
 export default async function Home() {
   const { settings, content, navigation, publishedArticles } = await getHomepageData();
   const featuredArticles = publishedArticles.filter((item) => item.is_featured).sort((a,b) => (a.featured_order ?? 0) - (b.featured_order ?? 0)).slice(0, 3);
@@ -36,32 +40,17 @@ export default async function Home() {
     name: region.name,
     href: region.cities[0] ? `/regions/${region.slug}/${region.cities[0].slug}` : `/regions/${region.slug}`,
   }));
-  const { props: heroDesktopProps } = getImageProps({
-    src: mediaUrl(settings.homepage.hero_image),
-    alt: settings.homepage.hero_image_alt,
-    width: 1600,
-    height: 1000,
-    sizes: "100vw",
-    quality: 75,
-    loading: "eager",
-    fetchPriority: "high",
-  });
-  const { props: heroMobileProps } = getImageProps({
-    src: mediaUrl(settings.homepage.hero_image_mobile),
-    alt: settings.homepage.hero_image_alt,
-    width: 800,
-    height: 1000,
-    sizes: "100vw",
-    quality: 75,
-    loading: "eager",
-    fetchPriority: "high",
-  });
+  // Vinext exposes next/image as a client reference in RSC, so calling
+  // getImageProps() from this server component would throw at runtime. Use the
+  // same image optimizer endpoint directly for the art-directed <picture>.
+  const heroDesktop = optimizedNextImageUrl(mediaUrl(settings.homepage.hero_image), 1200);
+  const heroMobile = optimizedNextImageUrl(mediaUrl(settings.homepage.hero_image_mobile), 1200);
   const contactTitleBreak = settings.homepage.contact_title.indexOf("開始約會");
   return (
     <main className="home-page">
       <JsonLd data={faqStructuredData} />
-      <link rel="preload" as="image" href={heroMobileProps.src} imageSrcSet={heroMobileProps.srcSet} imageSizes={heroMobileProps.sizes} media="(max-width: 700px)" fetchPriority="high" />
-      <link rel="preload" as="image" href={heroDesktopProps.src} imageSrcSet={heroDesktopProps.srcSet} imageSizes={heroDesktopProps.sizes} media="(min-width: 701px)" fetchPriority="high" />
+      <link rel="preload" as="image" href={heroMobile} media="(max-width: 700px)" fetchPriority="high" />
+      <link rel="preload" as="image" href={heroDesktop} media="(min-width: 701px)" fetchPriority="high" />
       <AgeGate />
       <header className="site-header home-header">
         <MobileMenu />
@@ -92,10 +81,15 @@ export default async function Home() {
         </div>
         <div className="hero-photo">
           <picture>
-            <source media="(min-width: 701px)" srcSet={heroDesktopProps.srcSet} sizes={heroDesktopProps.sizes} />
+            <source media="(min-width: 701px)" srcSet={heroDesktop} />
             <img
-              {...heroMobileProps}
-              alt={heroMobileProps.alt}
+              src={heroMobile}
+              alt={settings.homepage.hero_image_alt}
+              width="800"
+              height="1000"
+              fetchPriority="high"
+              loading="eager"
+              decoding="async"
               style={{
                 "--hero-position-desktop": settings.homepage.hero_image_position_desktop,
                 "--hero-position-mobile": settings.homepage.hero_image_position_mobile,
