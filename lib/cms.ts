@@ -155,14 +155,35 @@ async function getPublishedArticlesUncached(limit?: number) {
   return legacyError ? [] as CmsArticle[] : (legacyData ?? []) as CmsArticle[];
 }
 
+async function getPublishedArticleCardsUncached() {
+  const supabase = createPublicClient();
+  const { data, error } = await supabase.from("articles")
+    .select("id,slug,title,excerpt,category,category_id,is_featured,featured_order,cover_image_path,cover_image_alt,seo_title,seo_description,published_at,updated_at,article_categories(id,name,slug,sort_order,published,seo_title,seo_description)")
+    .eq("status", "published")
+    .order("sort_order")
+    .order("published_at", { ascending: false });
+  if (!error) return (data ?? []) as unknown as CmsArticle[];
+  const { data: legacyData, error: legacyError } = await supabase.from("articles")
+    .select("id,slug,title,excerpt,category,cover_image_path,seo_title,seo_description,published_at,updated_at")
+    .eq("status", "published")
+    .order("sort_order")
+    .order("published_at", { ascending: false });
+  return legacyError ? [] as CmsArticle[] : (legacyData ?? []) as CmsArticle[];
+}
+
+async function getPublicRegionsUncached() {
+  const { data } = await createPublicClient()
+    .from("regions")
+    .select("slug,name,sort_order,cities(slug,name,sort_order,published)")
+    .eq("published", true)
+    .order("sort_order");
+  return data ?? [];
+}
+
 async function getPublicNavigationUncached() {
   const supabase = createPublicClient();
-  const [{ data: regions }, { data: articles }] = await Promise.all([
-    supabase
-      .from("regions")
-      .select("slug,name,sort_order,cities(slug,name,sort_order,published)")
-      .eq("published", true)
-      .order("sort_order"),
+  const [regions, { data: articles }] = await Promise.all([
+    getPublicRegionsUncached(),
     supabase
       .from("articles")
       .select("slug,title")
@@ -170,7 +191,7 @@ async function getPublicNavigationUncached() {
       .order("sort_order")
       .limit(12),
   ]);
-  return { regions: regions ?? [], articles: articles ?? [] };
+  return { regions, articles: articles ?? [] };
 }
 
 async function getPublishedArticleUncached(slug: string) {
@@ -271,6 +292,8 @@ export const getPublishedProfile = unstable_cache(getPublishedProfileUncached, [
 export const getPublishedProfileSeoDuplicateCount = unstable_cache(getPublishedProfileSeoDuplicateCountUncached, ["published-profile-seo-duplicate-count"], { ...cacheOptions, tags: ["profiles"] });
 export const getRelatedProfiles = unstable_cache(getRelatedProfilesUncached, ["related-profiles"], { ...cacheOptions, tags: ["profiles", "regions"] });
 export const getPublishedArticles = unstable_cache(getPublishedArticlesUncached, ["published-articles"], { ...cacheOptions, tags: ["articles"] });
+export const getPublishedArticleCards = unstable_cache(getPublishedArticleCardsUncached, ["published-article-cards"], { ...cacheOptions, tags: ["articles"] });
+export const getPublicRegions = unstable_cache(getPublicRegionsUncached, ["public-regions"], { ...cacheOptions, tags: ["regions"] });
 export const getPublicNavigation = unstable_cache(getPublicNavigationUncached, ["public-navigation"], { ...cacheOptions, tags: ["regions", "articles"] });
 export const getPublishedArticle = unstable_cache(getPublishedArticleUncached, ["published-article"], { ...cacheOptions, tags: ["articles"] });
 export const getArticleCategories = unstable_cache(getArticleCategoriesUncached, ["article-categories"], { ...cacheOptions, tags: ["articles", "article-categories"] });
@@ -281,3 +304,21 @@ export async function getSiteSettings() {
 export async function getContentSettings() {
   return (await getPublicSettingsBundle()).content;
 }
+
+export async function getHomepageData() {
+  const [{ settings, content }, regions, publishedArticles] = await Promise.all([
+    getPublicSettingsBundle(),
+    getPublicRegions(),
+    getPublishedArticleCards(),
+  ]);
+  return {
+    settings,
+    content,
+    navigation: {
+      regions,
+      articles: publishedArticles.slice(0, 12).map(({ slug, title }) => ({ slug, title })),
+    },
+    publishedArticles,
+  };
+}
+

@@ -1,14 +1,13 @@
-import Image from "next/image";
+import Image, { getImageProps } from "next/image";
 import BrandMark from "@/components/BrandMark";
 import Link from "next/link";
 import AgeGate from "@/components/AgeGate";
 import RegionNav from "@/components/RegionNav";
 import MobileMenu from "@/components/MobileMenu";
-import { getContentSettings, getPublicNavigation, getPublishedArticles, getSiteSettings, mediaUrl, serviceMediaUrl } from "@/lib/cms";
+import { getHomepageData, mediaUrl, serviceMediaUrl } from "@/lib/cms";
 import ArticleCards from "@/components/ArticleCards";
 import JsonLd from "@/components/JsonLd";
 import { regions as fallbackRegions } from "@/data/regions";
-import { optimizedMediaSrcSet, optimizedMediaUrl } from "@/lib/media-image";
 import type { CSSProperties } from "react";
 
 const fallbackFaqs = [
@@ -20,7 +19,7 @@ const fallbackFaqs = [
 ];
 
 export default async function Home() {
-  const [settings, content, navigation, publishedArticles] = await Promise.all([getSiteSettings(), getContentSettings(), getPublicNavigation(), getPublishedArticles()]);
+  const { settings, content, navigation, publishedArticles } = await getHomepageData();
   const featuredArticles = publishedArticles.filter((item) => item.is_featured).sort((a,b) => (a.featured_order ?? 0) - (b.featured_order ?? 0)).slice(0, 3);
   const faqItems = content.faqs.length ? content.faqs : fallbackFaqs;
   const faqStructuredData = {
@@ -37,14 +36,32 @@ export default async function Home() {
     name: region.name,
     href: region.cities[0] ? `/regions/${region.slug}/${region.cities[0].slug}` : `/regions/${region.slug}`,
   }));
-  const heroDesktop = optimizedMediaUrl(mediaUrl(settings.homepage.hero_image), 1600, 84);
-  const heroMobile = optimizedMediaUrl(mediaUrl(settings.homepage.hero_image_mobile), 800, 82);
+  const { props: heroDesktopProps } = getImageProps({
+    src: mediaUrl(settings.homepage.hero_image),
+    alt: settings.homepage.hero_image_alt,
+    width: 1600,
+    height: 1000,
+    sizes: "100vw",
+    quality: 75,
+    loading: "eager",
+    fetchPriority: "high",
+  });
+  const { props: heroMobileProps } = getImageProps({
+    src: mediaUrl(settings.homepage.hero_image_mobile),
+    alt: settings.homepage.hero_image_alt,
+    width: 800,
+    height: 1000,
+    sizes: "100vw",
+    quality: 75,
+    loading: "eager",
+    fetchPriority: "high",
+  });
   const contactTitleBreak = settings.homepage.contact_title.indexOf("開始約會");
   return (
     <main className="home-page">
       <JsonLd data={faqStructuredData} />
-      <link rel="preload" as="image" href={heroMobile} media="(max-width: 700px)" fetchPriority="high" />
-      <link rel="preload" as="image" href={heroDesktop} media="(min-width: 701px)" fetchPriority="high" />
+      <link rel="preload" as="image" href={heroMobileProps.src} imageSrcSet={heroMobileProps.srcSet} imageSizes={heroMobileProps.sizes} media="(max-width: 700px)" fetchPriority="high" />
+      <link rel="preload" as="image" href={heroDesktopProps.src} imageSrcSet={heroDesktopProps.srcSet} imageSizes={heroDesktopProps.sizes} media="(min-width: 701px)" fetchPriority="high" />
       <AgeGate />
       <header className="site-header home-header">
         <MobileMenu />
@@ -60,7 +77,7 @@ export default async function Home() {
           <a className="nav-cta" href={settings.brand.line_url} target="_blank" rel="noopener noreferrer">{settings.navigation.line_cta}</a>
         </nav>
       </header>
-      <RegionNav />
+      <RegionNav navigation={navigation} settings={settings} />
 
       <section className="hero" id="top">
         <div className="hero-sun" aria-hidden="true" />
@@ -75,15 +92,10 @@ export default async function Home() {
         </div>
         <div className="hero-photo">
           <picture>
-            <source media="(min-width: 701px)" srcSet={heroDesktop} />
+            <source media="(min-width: 701px)" srcSet={heroDesktopProps.srcSet} sizes={heroDesktopProps.sizes} />
             <img
-              src={heroMobile}
-              alt={settings.homepage.hero_image_alt}
-              width="800"
-              height="1000"
-              fetchPriority="high"
-              loading="eager"
-              decoding="async"
+              {...heroMobileProps}
+              alt={heroMobileProps.alt}
               style={{
                 "--hero-position-desktop": settings.homepage.hero_image_position_desktop,
                 "--hero-position-mobile": settings.homepage.hero_image_position_mobile,
@@ -96,7 +108,7 @@ export default async function Home() {
 
       <nav className="quick-regions" aria-label="熱門地區快速入口">
         <strong>熱門地區</strong>
-        {quickRegions.map((region) => <Link href={region.href} key={region.href}>{region.name}</Link>)}
+        {quickRegions.map((region) => <Link href={region.href} prefetch={false} key={region.href}>{region.name}</Link>)}
       </nav>
 
       <section className="intro section" id="about">
@@ -120,10 +132,7 @@ export default async function Home() {
             const imageUrl = mediaUrl(image.src);
             return (
               <figure className={`gallery-item item-${index + 1}`} key={`${index}-${image.src}`}>
-                {/* Gallery uploads are already resized and converted before storage. Using the
-                    original object preserves its true aspect ratio on every viewport. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imageUrl} alt={image.alt} width="900" height="1200" loading="lazy" decoding="async" fetchPriority="low" />
+                <Image src={imageUrl} alt={image.alt} width={900} height={1200} sizes="(max-width: 700px) 50vw, 33vw" quality={62} />
               </figure>
             )
           })}
@@ -139,7 +148,7 @@ export default async function Home() {
           {content.services.map((service, index) => (
             <article className="service-card" key={service.slug}>
               <Link className="service-image" href={`/services/${service.slug}`}>
-                <Image src={serviceMediaUrl(service.image, settings.gallery.images[index % Math.max(settings.gallery.images.length, 1)]?.src ?? settings.homepage.hero_image)} alt={`${service.title}形象照`} fill sizes="(max-width: 560px) 33vw, 33vw" unoptimized style={{ objectPosition: service.image_position }} />
+                <Image src={serviceMediaUrl(service.image, settings.gallery.images[index % Math.max(settings.gallery.images.length, 1)]?.src ?? settings.homepage.hero_image)} alt={`${service.title}形象照`} fill sizes="(max-width: 560px) 33vw, 33vw" quality={62} style={{ objectPosition: service.image_position }} />
               </Link>
               <div className="service-body">
                 <span>{service.number}</span>
@@ -154,9 +163,7 @@ export default async function Home() {
 
       <section className="promise section">
         <div className="promise-image">
-          {/* Supabase's image transformation endpoint supplies the responsive source. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={optimizedMediaUrl(mediaUrl(settings.homepage.promise_image), 1200, 82)} srcSet={optimizedMediaSrcSet(mediaUrl(settings.homepage.promise_image), [[640, 78], [900, 80], [1200, 82]])} alt={settings.homepage.promise_image_alt} width="1200" height="900" loading="lazy" decoding="async" fetchPriority="low" sizes="100vw" style={{ "--promise-position-desktop": settings.homepage.promise_image_position_desktop, "--promise-position-mobile": settings.homepage.promise_image_position_mobile } as CSSProperties} />
+          <Image src={mediaUrl(settings.homepage.promise_image)} alt={settings.homepage.promise_image_alt} width={1200} height={900} sizes="(max-width: 800px) 100vw, 50vw" quality={62} style={{ "--promise-position-desktop": settings.homepage.promise_image_position_desktop, "--promise-position-mobile": settings.homepage.promise_image_position_mobile } as CSSProperties} />
         </div>
         <div className="promise-overlay" aria-hidden="true" />
         <div className="promise-copy">
@@ -211,4 +218,5 @@ export default async function Home() {
     </main>
   );
 }
+
 

@@ -10,7 +10,15 @@ export default function ContactControlsClient({ lineUrl, brandName }: { lineUrl:
     if (pathname.startsWith("/admin")) return;
     const contact = document.querySelector("#contact");
     let contactVisible = false;
-    const update = () => setShowFloating(window.scrollY > 220 && !contactVisible);
+    let animationFrame = 0;
+    const update = () => {
+      if (animationFrame) return;
+      animationFrame = window.requestAnimationFrame(() => {
+        animationFrame = 0;
+        const nextVisible = window.scrollY > 220 && !contactVisible;
+        setShowFloating((current) => current === nextVisible ? current : nextVisible);
+      });
+    };
     const observer = contact ? new IntersectionObserver(([entry]) => {
       contactVisible = entry.isIntersecting;
       update();
@@ -21,6 +29,7 @@ export default function ContactControlsClient({ lineUrl, brandName }: { lineUrl:
     return () => {
       observer?.disconnect();
       window.removeEventListener("scroll", update);
+      if (animationFrame) window.cancelAnimationFrame(animationFrame);
     };
   }, [pathname]);
   if (pathname.startsWith("/admin")) return null;
@@ -28,3 +37,4 @@ export default function ContactControlsClient({ lineUrl, brandName }: { lineUrl:
     <a className={`floating-line${showFloating ? " is-visible" : ""}`} href={lineUrl} target="_blank" rel="noopener noreferrer" aria-label={`透過 LINE 聯絡${brandName}`}><span>LINE</span><strong>點我加 LINE</strong></a>
   </>;
 }
+
