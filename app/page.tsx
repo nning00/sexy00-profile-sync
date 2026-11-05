@@ -142,7 +142,7 @@ export default async function Home() {
           {content.services.map((service, index) => (
             <article className="service-card" key={service.slug}>
               <Link className="service-image" href={`/services/${service.slug}`}>
-                <OptimizedMediaImage src={serviceMediaUrl(service.image, settings.gallery.images[index % Math.max(settings.gallery.images.length, 1)]?.src ?? settings.homepage.hero_image)} alt={`${service.title}形象照`} fill sizes="(max-width: 560px) 33vw, 33vw" quality={62} style={{ objectPosition: service.image_position }} />
+                <OptimizedMediaImage src={serviceMediaUrl(service.image, settings.gallery.images[index % Math.max(settings.gallery.images.length, 1)]?.src ?? settings.homepage.hero_image)} alt={`${service.title}形象照`} fill fallbackWidth={480} sizes="(max-width: 560px) 33vw, 33vw" quality={62} style={{ objectPosition: service.image_position }} />
               </Link>
               <div className="service-body">
                 <span>{service.number}</span>

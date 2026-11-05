@@ -46,6 +46,7 @@ export default function CityProfileGrid({ profiles: initialProfiles, total, regi
             src={profile.image}
             alt={profile.imageAlt}
             fill
+            fallbackWidth={480}
             preload={index === 0}
             sizes="(max-width: 680px) 50vw, 33vw"
           />

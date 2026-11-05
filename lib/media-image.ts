@@ -19,7 +19,7 @@ export function isSiteMedia(src: string) {
 export function siteMediaLoader({ src, width, quality }: { src: string; width: number; quality?: number }) {
   if (!isSiteMedia(src)) return src;
   const url = new URL(src, "https://site.invalid");
-  url.searchParams.set("width", String(width));
+  url.searchParams.set("width", String(width > 0 ? width : 960));
   url.searchParams.set("quality", String(quality ?? 64));
   return `${url.pathname}?${url.searchParams.toString()}`;
 }
