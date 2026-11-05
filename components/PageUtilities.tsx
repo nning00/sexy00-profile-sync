@@ -10,6 +10,8 @@ export default function PageUtilities() {
   useLayoutEffect(() => {
     if (window.location.hash) return;
     window.scrollTo(0, 0);
+    const frame = window.requestAnimationFrame(() => window.scrollTo(0, 0));
+    return () => window.cancelAnimationFrame(frame);
   }, [pathname]);
   useEffect(() => {
     const sentinel = sentinelRef.current;
