@@ -1,8 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import { useState, type TouchEvent } from "react";
-import { isSupabaseMedia, supabaseImageLoader } from "@/lib/media-image";
+import OptimizedMediaImage from "@/components/OptimizedMediaImage";
 
 type GalleryImage = { src: string; alt: string };
 const isVideo = (src: string) => /\.(mp4|webm)(?:\?|$)/i.test(src);
@@ -23,7 +22,7 @@ export default function ProfileGallery({ images }: { images: GalleryImage[] }) {
     <div className="profile-carousel-stage" onTouchStart={(event) => setTouchStart(event.touches[0].clientX)} onTouchEnd={finishSwipe}>
       {isVideo(images[active].src)
         ? <video key={images[active].src} src={images[active].src} controls playsInline preload="metadata" aria-label={images[active].alt} />
-        : <Image src={images[active].src} alt={images[active].alt} fill preload loader={isSupabaseMedia(images[active].src) ? supabaseImageLoader : undefined} quality={64} sizes="(max-width: 800px) 100vw, 52vw" />}
+        : <OptimizedMediaImage src={images[active].src} alt={images[active].alt} fill preload quality={64} sizes="(max-width: 800px) 100vw, 52vw" />}
       {total > 1 && <>
         <button className="profile-carousel-arrow previous" type="button" onClick={() => move(-1)} aria-label="上一張照片"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7" /></svg></button>
         <button className="profile-carousel-arrow next" type="button" onClick={() => move(1)} aria-label="下一張照片"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg></button>
@@ -32,7 +31,7 @@ export default function ProfileGallery({ images }: { images: GalleryImage[] }) {
     </div>
     {total > 1 && <div className="profile-carousel-thumbs">
       {images.map((image, index) => <button className={`${index === active ? "active" : ""} ${isVideo(image.src) ? "video-thumb" : ""}`} type="button" onClick={() => setActive(index)} aria-label={`查看第 ${index + 1} 個相簿內容`} key={`${image.src}-${index}`}>
-        {isVideo(image.src) ? <span aria-hidden="true">▶</span> : <Image src={image.src} alt="" fill loader={isSupabaseMedia(image.src) ? supabaseImageLoader : undefined} quality={58} sizes="76px" />}
+        {isVideo(image.src) ? <span aria-hidden="true">▶</span> : <OptimizedMediaImage src={image.src} alt="" fill quality={58} sizes="76px" />}
       </button>)}
     </div>}
   </div>;

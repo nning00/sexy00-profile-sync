@@ -1,5 +1,5 @@
-import Image from "next/image";
 import BrandMark from "@/components/BrandMark";
+import OptimizedMediaImage from "@/components/OptimizedMediaImage";
 import Link from "next/link";
 import AgeGate from "@/components/AgeGate";
 import RegionNav from "@/components/RegionNav";
@@ -9,6 +9,7 @@ import ArticleCards from "@/components/ArticleCards";
 import JsonLd from "@/components/JsonLd";
 import { regions as fallbackRegions } from "@/data/regions";
 import type { CSSProperties } from "react";
+import { mediaVariantUrl } from "@/lib/media-image";
 
 const fallbackFaqs = [
   { question: "如何進行預約諮詢？", answer: "請點選網站上的 LINE 按鈕，簡單說明希望了解的內容、日期與方便聯絡的時間。我們會透過 LINE 回覆並確認後續流程。" },
@@ -17,10 +18,6 @@ const fallbackFaqs = [
   { question: "臨時需要更改或取消怎麼辦？", answer: "請儘早透過原本的 LINE 對話告知。實際變更與取消方式會依雙方預約時確認的內容處理。" },
   { question: "未滿 18 歲可以瀏覽或聯絡嗎？", answer: "不可以。本網站及相關諮詢僅限年滿 18 歲的成年人，未滿 18 歲請立即離開網站。" },
 ];
-
-function optimizedNextImageUrl(src: string, width: 1200 | 640, quality = 75) {
-  return `/_next/image?url=${encodeURIComponent(src)}&w=${width}&q=${quality}`;
-}
 
 export default async function Home() {
   const { settings, content, navigation, publishedArticles } = await getHomepageData();
@@ -40,11 +37,12 @@ export default async function Home() {
     name: region.name,
     href: region.cities[0] ? `/regions/${region.slug}/${region.cities[0].slug}` : `/regions/${region.slug}`,
   }));
-  // Vinext exposes next/image as a client reference in RSC, so calling
-  // getImageProps() from this server component would throw at runtime. Use the
-  // same image optimizer endpoint directly for the art-directed <picture>.
-  const heroDesktop = optimizedNextImageUrl(mediaUrl(settings.homepage.hero_image), 1200);
-  const heroMobile = optimizedNextImageUrl(mediaUrl(settings.homepage.hero_image_mobile), 1200);
+  const heroDesktopSource = mediaUrl(settings.homepage.hero_image);
+  const heroMobileSource = mediaUrl(settings.homepage.hero_image_mobile);
+  const heroDesktop = mediaVariantUrl(heroDesktopSource, 1200, 75);
+  const heroDesktopSmall = mediaVariantUrl(heroDesktopSource, 828, 75);
+  const heroMobile = mediaVariantUrl(heroMobileSource, 828, 75);
+  const heroMobileSmall = mediaVariantUrl(heroMobileSource, 640, 75);
   const contactTitleBreak = settings.homepage.contact_title.indexOf("開始約會");
   return (
     <main className="home-page">
@@ -81,9 +79,11 @@ export default async function Home() {
         </div>
         <div className="hero-photo">
           <picture>
-            <source media="(min-width: 701px)" srcSet={heroDesktop} />
+            <source media="(min-width: 701px)" srcSet={`${heroDesktopSmall} 828w, ${heroDesktop} 1200w`} sizes="100vw" />
             <img
               src={heroMobile}
+              srcSet={`${heroMobileSmall} 640w, ${heroMobile} 828w`}
+              sizes="100vw"
               alt={settings.homepage.hero_image_alt}
               width="800"
               height="1000"
@@ -126,7 +126,7 @@ export default async function Home() {
             const imageUrl = mediaUrl(image.src);
             return (
               <figure className={`gallery-item item-${index + 1}`} key={`${index}-${image.src}`}>
-                <Image src={imageUrl} alt={image.alt} width={900} height={1200} sizes="(max-width: 700px) 50vw, 33vw" quality={62} />
+                <OptimizedMediaImage src={imageUrl} alt={image.alt} width={900} height={1200} sizes="(max-width: 700px) 50vw, 33vw" quality={62} />
               </figure>
             )
           })}
@@ -142,7 +142,7 @@ export default async function Home() {
           {content.services.map((service, index) => (
             <article className="service-card" key={service.slug}>
               <Link className="service-image" href={`/services/${service.slug}`}>
-                <Image src={serviceMediaUrl(service.image, settings.gallery.images[index % Math.max(settings.gallery.images.length, 1)]?.src ?? settings.homepage.hero_image)} alt={`${service.title}形象照`} fill sizes="(max-width: 560px) 33vw, 33vw" quality={62} style={{ objectPosition: service.image_position }} />
+                <OptimizedMediaImage src={serviceMediaUrl(service.image, settings.gallery.images[index % Math.max(settings.gallery.images.length, 1)]?.src ?? settings.homepage.hero_image)} alt={`${service.title}形象照`} fill sizes="(max-width: 560px) 33vw, 33vw" quality={62} style={{ objectPosition: service.image_position }} />
               </Link>
               <div className="service-body">
                 <span>{service.number}</span>
@@ -157,7 +157,7 @@ export default async function Home() {
 
       <section className="promise section">
         <div className="promise-image">
-          <Image src={mediaUrl(settings.homepage.promise_image)} alt={settings.homepage.promise_image_alt} width={1200} height={900} sizes="(max-width: 800px) 100vw, 50vw" quality={62} style={{ "--promise-position-desktop": settings.homepage.promise_image_position_desktop, "--promise-position-mobile": settings.homepage.promise_image_position_mobile } as CSSProperties} />
+          <OptimizedMediaImage src={mediaUrl(settings.homepage.promise_image)} alt={settings.homepage.promise_image_alt} width={1200} height={900} sizes="(max-width: 800px) 100vw, 50vw" quality={62} style={{ "--promise-position-desktop": settings.homepage.promise_image_position_desktop, "--promise-position-mobile": settings.homepage.promise_image_position_mobile } as CSSProperties} />
         </div>
         <div className="promise-overlay" aria-hidden="true" />
         <div className="promise-copy">
@@ -212,5 +212,4 @@ export default async function Home() {
     </main>
   );
 }
-
 
