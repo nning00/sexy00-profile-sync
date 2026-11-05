@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
 export default function PageUtilities() {
   const pathname = usePathname(); const router = useRouter(); const [visible, setVisible] = useState(false);
   const sentinelRef = useRef<HTMLSpanElement>(null);
   const isAdmin = pathname.startsWith("/admin");
+  useLayoutEffect(() => {
+    if (window.location.hash) return;
+    window.scrollTo(0, 0);
+  }, [pathname]);
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;

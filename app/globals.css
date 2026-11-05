@@ -987,9 +987,11 @@ h2 { margin: 0; font-size: clamp(36px, 4vw, 58px); line-height: 1.4; letter-spac
   .mobile-drawer-layer { width: 100%; min-height: 100vh; height: 100dvh; position: fixed; inset: 0; z-index: 2147483000; overflow: hidden; isolation: isolate; contain: layout paint; }
   .mobile-drawer-backdrop { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; border: 0; background: rgba(35,25,28,.55); }
   .mobile-drawer { width: min(76vw, 390px); height: 100%; padding-bottom: env(safe-area-inset-bottom, 0); position: relative; z-index: 1; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; background: white; box-shadow: 20px 0 55px rgba(0,0,0,.2); }
-  .drawer-search { height: 84px; padding: 0 22px; display: flex; align-items: center; border-bottom: 1px solid #e8e2e3; }
+  .drawer-search { height: 84px; padding: 0 14px 0 22px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #e8e2e3; }
   .drawer-search input { min-width: 0; flex: 1; color: var(--ink); background: transparent; border: 0; outline: 0; font-size: 15px; font-weight: 600; }
   .drawer-search span { color: #777; font-size: 31px; }
+  .mobile-drawer-close { width: 42px; height: 42px; flex: 0 0 42px; display: grid; place-items: center; color: var(--ink); background: rgba(255,255,255,.82); border: 1px solid #ded7d9; border-radius: 50%; cursor: pointer; font-size: 28px; line-height: 1; }
+  .mobile-drawer-close:focus-visible { outline: 3px solid var(--rose); outline-offset: 2px; }
   .drawer-tabs { display: grid; grid-template-columns: 1fr 1fr; background: #f5f3f3; }
   .drawer-tabs button { padding: 20px 8px; color: #858084; background: transparent; border: 0; border-bottom: 3px solid transparent; font-weight: 600; }
   .drawer-tabs button.active { color: var(--ink); background: white; border-bottom-color: var(--rose); }
