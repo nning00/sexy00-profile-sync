@@ -4,7 +4,7 @@ const configuredSiteUrl = (process.env.SITE_URL || process.env.NEXT_PUBLIC_SITE_
 const siteUrl = (
   configuredSiteUrl && !/^(?:https?:\/\/)?(?:localhost|127\.0\.0\.1)(?::|\/|$)/i.test(configuredSiteUrl)
     ? configuredSiteUrl
-    : "https://sexyning.cc"
+    : "https://sexy00.cc"
 ).replace(/\/$/, "");
 
 export default function robots(): MetadataRoute.Robots {

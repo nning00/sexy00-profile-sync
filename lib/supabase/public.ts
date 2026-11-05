@@ -1,7 +1,14 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 import { supabaseSchema } from "@/lib/site-instance";
 
-let publicClient: SupabaseClient | undefined;
+function buildPublicClient(url: string, publishableKey: string) {
+  return createClient(url, publishableKey, {
+    db: { schema: supabaseSchema },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}
+
+let publicClient: ReturnType<typeof buildPublicClient> | undefined;
 
 export function createPublicClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -11,9 +18,6 @@ export function createPublicClient() {
     throw new Error("Supabase public environment variables are not configured.");
   }
 
-  publicClient ??= createClient(url, publishableKey, {
-    db: { schema: supabaseSchema },
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  });
+  publicClient ??= buildPublicClient(url, publishableKey);
   return publicClient;
 }

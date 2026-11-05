@@ -7,6 +7,7 @@ import { refreshPublicContent } from "@/lib/refresh-public-content";
 
 type Category = { id: string; name: string };
 type ExistingImage = { id: string; storage_path: string; alt_text: string | null; sort_order: number };
+type SaveArticleResult = { ok?: boolean; error?: string; indexNowPaths?: string[] };
 type ArticleData = {
   id?: string; slug: string; title: string; excerpt: string | null; category: string | null;
   category_id?: string | null; is_featured?: boolean; featured_order?: number; content: unknown;
@@ -57,7 +58,7 @@ export default function ArticleForm({ initial, categories, existingImages = [] }
       body: form,
       signal: AbortSignal.timeout(60_000),
     });
-    const result = await response.json().catch(() => ({}));
+    const result = await response.json().catch(() => ({})) as SaveArticleResult;
     if (!response.ok || !result.ok) throw new Error(result.error || "儲存請求失敗，請稍後再試。");
 
     await refreshPublicContent(["articles"], result.indexNowPaths ?? []).catch(() => undefined);

@@ -15,6 +15,7 @@ const MAX_PROFILES = 100;
 const MAX_SNAPSHOT_KEYS = 50000;
 const MAX_IMAGES_PER_PROFILE = 3;
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+const MIN_SAFE_SNAPSHOT_RATIO = 0.6;
 
 type SourceImage = { url: string; alt?: string };
 type SourceProfile = {
@@ -181,12 +182,7 @@ async function syncImages(profileId: string, displayName: string, images: Source
   const desired = new Set(images.map((image) => image.url));
 
   const removed = (trackedRows ?? []).filter((row) => !desired.has(row.source_url));
-  if (removed.length) {
-    const ownedPaths = removed.map((row) => row.storage_path).filter(isOwnedMediaPath);
-    if (ownedPaths.length) await supabase.storage.from("site-media").remove(ownedPaths);
-    const { error } = await supabase.from("profile_source_images").delete().eq("profile_id", profileId).in("source_url", removed.map((row) => row.source_url));
-    if (error) throw error;
-  }
+  const removedOwnedPaths = removed.map((row) => row.storage_path).filter(isOwnedMediaPath);
 
   for (const [index, image] of images.entries()) {
     let storagePath = tracked.get(image.url);
@@ -221,10 +217,10 @@ async function syncImages(profileId: string, displayName: string, images: Source
     return row ? [{ ...row, alt_text: image.alt || `${displayName}形象照片 ${index + 1}`, sort_order: index + 1 }] : [];
   });
 
-  if (previousStoragePaths.length) {
-    const { error: deleteRowsError } = await supabase.from("profile_images").delete().eq("profile_id", profileId).in("storage_path", previousStoragePaths);
-    if (deleteRowsError) throw deleteRowsError;
-  }
+  const { data: previousImageRows, error: previousImageRowsError } = previousStoragePaths.length
+    ? await supabase.from("profile_images").select("id").eq("profile_id", profileId).in("storage_path", previousStoragePaths)
+    : { data: [], error: null };
+  if (previousImageRowsError) throw previousImageRowsError;
   if (ordered.length) {
     const { error: imageRowsError } = await supabase.from("profile_images").insert(ordered.map((row) => ({
       profile_id: profileId,
@@ -233,6 +229,16 @@ async function syncImages(profileId: string, displayName: string, images: Source
       sort_order: row.sort_order,
     })));
     if (imageRowsError) throw imageRowsError;
+  }
+  const previousImageIds = (previousImageRows ?? []).map((row) => row.id);
+  if (previousImageIds.length) {
+    const { error: deleteRowsError } = await supabase.from("profile_images").delete().in("id", previousImageIds);
+    if (deleteRowsError) throw deleteRowsError;
+  }
+  if (removed.length) {
+    const { error: removeTrackingError } = await supabase.from("profile_source_images").delete().eq("profile_id", profileId).in("source_url", removed.map((row) => row.source_url));
+    if (removeTrackingError) throw removeTrackingError;
+    if (removedOwnedPaths.length) await supabase.storage.from("site-media").remove(removedOwnedPaths);
   }
   return ordered[0]?.storage_path ?? null;
 }
@@ -243,9 +249,11 @@ export async function POST(request: Request) {
   const snapshotSourceKeys = Array.isArray(body?.snapshotSourceKeys)
     ? body.snapshotSourceKeys.map((value) => clean(value, 80).toLowerCase().replace(/[^a-z0-9_-]/g, "")).filter(Boolean)
     : [];
+  const uniqueSnapshotSourceKeys = [...new Set(snapshotSourceKeys)];
   if (!body || !Array.isArray(body.profiles) || body.profiles.length > MAX_PROFILES
     || snapshotSourceKeys.length > MAX_SNAPSHOT_KEYS
-    || (body.finalizeSnapshot && snapshotSourceKeys.length === 0)) {
+    || (body.finalizeSnapshot && snapshotSourceKeys.length === 0)
+    || uniqueSnapshotSourceKeys.length !== snapshotSourceKeys.length) {
     return NextResponse.json({ error: "Invalid sync payload" }, { status: 400 });
   }
   const mode = body.mode === "commit" ? "commit" : "preview";
@@ -361,10 +369,13 @@ export async function POST(request: Request) {
         : await supabase.from("profiles").insert(payload).select("id").single();
       if (save.error) throw save.error;
       const profileId = save.data.id;
-      const { error: assignmentDeleteError } = await supabase.from("profile_cities").delete().eq("profile_id", profileId);
-      if (assignmentDeleteError) throw assignmentDeleteError;
-      const { error: assignmentError } = await supabase.from("profile_cities").insert({ profile_id: profileId, city_id: city.id });
+      const { error: assignmentError } = await supabase.from("profile_cities").upsert(
+        { profile_id: profileId, city_id: city.id },
+        { onConflict: "profile_id,city_id" },
+      );
       if (assignmentError) throw assignmentError;
+      const { error: assignmentDeleteError } = await supabase.from("profile_cities").delete().eq("profile_id", profileId).neq("city_id", city.id);
+      if (assignmentDeleteError) throw assignmentDeleteError;
       const coverPath = await syncImages(profileId, profile.displayName, profile.images);
       const { error: coverError } = await supabase.from("profiles").update({ card_image_path: coverPath, source_content_hash: profile.contentHash }).eq("id", profileId);
       if (coverError) throw coverError;
@@ -376,12 +387,54 @@ export async function POST(request: Request) {
   }
 
   if (body.finalizeSnapshot && result.errors.length === 0) {
-    const seen = new Set(snapshotSourceKeys);
-    const missing = (existing ?? []).filter((profile) => !seen.has(profile.source_key));
+    const activeExisting = (existing ?? []).filter((profile) => profile.status !== "archived");
+    const { data: previousRuns } = await supabase
+      .from("profile_sync_runs")
+      .select("summary")
+      .eq("provider", PROVIDER)
+      .eq("mode", "snapshot")
+      .eq("status", "success")
+      .order("completed_at", { ascending: false })
+      .limit(20);
+    const previousSnapshotCounts = (previousRuns ?? []).flatMap((run) => {
+      const count = Number((run.summary as Record<string, unknown> | null)?.snapshotCount);
+      return Number.isSafeInteger(count) && count > 0 ? [count] : [];
+    });
+    const referenceCount = Math.max(activeExisting.length, ...previousSnapshotCounts, 0);
+    const minimumSafeCount = referenceCount >= 100
+      ? Math.floor(referenceCount * MIN_SAFE_SNAPSHOT_RATIO)
+      : Math.max(1, referenceCount - 20);
+    if (uniqueSnapshotSourceKeys.length < minimumSafeCount) {
+      const blockedSummary = {
+        snapshotCount: uniqueSnapshotSourceKeys.length,
+        referenceCount,
+        minimumSafeCount,
+        reason: "snapshot-count-drop",
+      };
+      await supabase.from("profile_sync_runs").insert({
+        provider: PROVIDER,
+        mode: "snapshot",
+        status: "blocked",
+        summary: blockedSummary,
+        completed_at: new Date().toISOString(),
+      });
+      return NextResponse.json({ error: "Snapshot completeness check failed", summary: blockedSummary }, { status: 409 });
+    }
+
+    const seen = new Set(uniqueSnapshotSourceKeys);
+    const missing = activeExisting.filter((profile) => !seen.has(profile.source_key));
     if (missing.length) {
       const { error } = await supabase.from("profiles").update({ status: "archived" }).in("id", missing.map((profile) => profile.id));
-      if (!error) result.archived = missing.length;
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      result.archived = missing.length;
     }
+    await supabase.from("profile_sync_runs").insert({
+      provider: PROVIDER,
+      mode: "snapshot",
+      status: "success",
+      summary: { snapshotCount: uniqueSnapshotSourceKeys.length, referenceCount, archived: result.archived },
+      completed_at: new Date().toISOString(),
+    });
   }
 
   // A full import can contain hundreds of batches. Revalidating the entire

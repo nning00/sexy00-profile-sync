@@ -17,7 +17,10 @@ export async function POST(request: Request) {
     .maybeSingle();
   if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const body = await request.json().catch(() => ({ tags: [], indexNowPaths: [] }));
+  const body = await request.json().catch(() => ({ tags: [], indexNowPaths: [] })) as {
+    tags?: unknown;
+    indexNowPaths?: unknown;
+  };
   const requestedTags: unknown[] = Array.isArray(body.tags) ? body.tags : [];
   const tags: string[] = [...new Set(requestedTags.filter(
     (tag): tag is string => typeof tag === "string" && allowedTags.has(tag),

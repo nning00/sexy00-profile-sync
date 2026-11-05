@@ -1,7 +1,14 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 import { supabaseSchema } from "@/lib/site-instance";
 
-let adminClient: SupabaseClient | undefined;
+function buildAdminClient(url: string, serviceRoleKey: string) {
+  return createClient(url, serviceRoleKey, {
+    db: { schema: supabaseSchema },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+}
+
+let adminClient: ReturnType<typeof buildAdminClient> | undefined;
 
 export function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -11,9 +18,6 @@ export function createAdminClient() {
     throw new Error("Supabase service role environment variables are not configured.");
   }
 
-  adminClient ??= createClient(url, serviceRoleKey, {
-    db: { schema: supabaseSchema },
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-  });
+  adminClient ??= buildAdminClient(url, serviceRoleKey);
   return adminClient;
 }

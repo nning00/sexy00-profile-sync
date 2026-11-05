@@ -27,12 +27,12 @@ export default function ProfileForm({ initial, cities = [], initialCityIds = [],
     const supabase = createClient();
     const storagePaths = [initial.card_image_path, ...existingImages.map((item) => item.storage_path)]
       .filter(isOwnedMediaPath);
-    if (storagePaths.length) {
-      const { error: storageError } = await supabase.storage.from("site-media").remove(storagePaths);
-      if (storageError) { setMessage(`刪除媒體失敗：${storageError.message}`); setSaving(false); return; }
-    }
     const { error } = await supabase.from("profiles").delete().eq("id", initial.id);
     if (error) { setMessage(`刪除形象失敗：${error.message}`); setSaving(false); return; }
+    if (storagePaths.length) {
+      const { error: storageError } = await supabase.storage.from("site-media").remove(storagePaths);
+      if (storageError) console.error("形象已刪除，但媒體清理失敗", storageError);
+    }
     await refreshPublicContent(["profiles", "regions"]).catch(() => undefined);
     router.push(`/admin/profiles${returnCityId ? `?city=${returnCityId}` : ""}`); router.refresh();
   }
@@ -52,6 +52,7 @@ export default function ProfileForm({ initial, cities = [], initialCityIds = [],
       setSaving(false); return;
     }
     let imagePath = initial?.card_image_path ?? null;
+    let uploadedPrimaryPath: string | null = null;
     const file = form.get("image") as File;
     if (file?.size) {
       const prepared = await prepareImageForUpload(file);
@@ -63,6 +64,7 @@ export default function ProfileForm({ initial, cities = [], initialCityIds = [],
       });
       if (uploadError) { setMessage(`圖片上傳失敗：${uploadError.message}`); setSaving(false); return; }
       imagePath = path;
+      uploadedPrimaryPath = path;
     }
     const payload = {
       slug, display_name: String(form.get("display_name") ?? "").trim(),
@@ -73,34 +75,41 @@ export default function ProfileForm({ initial, cities = [], initialCityIds = [],
       sort_order: Number(form.get("sort_order") ?? 0),
       seo_title: String(form.get("seo_title") ?? "").trim(), seo_description: String(form.get("seo_description") ?? "").trim(),
     };
-    const result = initial?.id
-      ? await supabase.from("profiles").update(payload).eq("id", initial.id).select("id").single()
-      : await supabase.from("profiles").insert(payload).select("id").single();
+    const cityIds = [...new Set(form.getAll("city_ids").map(String))];
+    const result = await supabase.rpc("save_profile_with_cities", {
+      p_profile_id: initial?.id ?? null,
+      p_slug: payload.slug,
+      p_display_name: payload.display_name,
+      p_style: payload.style,
+      p_interest: payload.interest,
+      p_introduction: payload.introduction,
+      p_card_image_path: payload.card_image_path,
+      p_status: payload.status,
+      p_sort_order: payload.sort_order,
+      p_seo_title: payload.seo_title,
+      p_seo_description: payload.seo_description,
+      p_adult_review_status: payload.adult_review_status,
+      p_city_ids: cityIds,
+    });
     if (result.error) {
+      if (uploadedPrimaryPath) await supabase.storage.from("site-media").remove([uploadedPrimaryPath]);
       const errorMessage = result.error.code === "23505" ? `網址代稱「${slug}」已被使用，請更換一個不重複的代稱。` : `儲存失敗：${result.error.message}`;
       setMessage(errorMessage); setSaving(false); return;
     }
-    const profileId = initial?.id ?? result.data.id;
-    const cityIds = form.getAll("city_ids").map(String);
-    const { error: removeError } = await supabase.from("profile_cities").delete().eq("profile_id", profileId);
-    if (removeError) { setMessage(`地區更新失敗：${removeError.message}`); setSaving(false); return; }
-    if (cityIds.length) {
-      const { error: cityError } = await supabase.from("profile_cities").insert(cityIds.map((city_id) => ({ profile_id: profileId, city_id })));
-      if (cityError) { setMessage(`地區更新失敗：${cityError.message}`); setSaving(false); return; }
+    if (!result.data) {
+      if (uploadedPrimaryPath) await supabase.storage.from("site-media").remove([uploadedPrimaryPath]);
+      setMessage("儲存失敗：資料庫未回傳形象編號。"); setSaving(false); return;
     }
+    const profileId = String(result.data);
     const videoValue = form.get("profile_video");
     const newVideo = videoValue instanceof File && videoValue.size > 0 ? videoValue : null;
     if (newVideo && newVideo.size > 50 * 1024 * 1024) {
       setMessage("影片超過 50 MB，請先壓縮後再上傳。"); setSaving(false); return;
     }
-    for (const image of existingImages) {
-      if (form.get(`remove_image_${image.id}`) || (newVideo && isVideoPath(image.storage_path))) {
-        const { error: deleteRowError } = await supabase.from("profile_images").delete().eq("id", image.id);
-        if (deleteRowError) { setMessage(`相簿更新失敗：${deleteRowError.message}`); setSaving(false); return; }
-        if (isOwnedMediaPath(image.storage_path)) await supabase.storage.from("site-media").remove([image.storage_path]);
-      } else {
-        await supabase.from("profile_images").update({ alt_text: String(form.get(`alt_${image.id}`) ?? "").trim() }).eq("id", image.id);
-      }
+    const imagesToRemove = existingImages.filter((image) => form.get(`remove_image_${image.id}`) || (newVideo && isVideoPath(image.storage_path)));
+    for (const image of existingImages.filter((candidate) => !imagesToRemove.some((removed) => removed.id === candidate.id))) {
+      const { error: altError } = await supabase.from("profile_images").update({ alt_text: String(form.get(`alt_${image.id}`) ?? "").trim() }).eq("id", image.id);
+      if (altError) { setMessage(`圖片描述更新失敗：${altError.message}`); setSaving(false); return; }
     }
     const pendingImages = uploadRows.flatMap((row) => {
       const galleryFile = form.get(`gallery_image_${row}`);
@@ -118,7 +127,10 @@ export default function ProfileForm({ initial, cities = [], initialCityIds = [],
       });
       if (galleryUploadError) { setMessage(`相簿上傳失敗：${galleryUploadError.message}`); setSaving(false); return; }
       const { error: imageRowError } = await supabase.from("profile_images").insert({ profile_id: profileId, storage_path: storagePath, alt_text: pendingImage.alt || payload.display_name, sort_order: existingImages.length + index + 1 });
-      if (imageRowError) { setMessage(`相簿儲存失敗：${imageRowError.message}`); setSaving(false); return; }
+      if (imageRowError) {
+        await supabase.storage.from("site-media").remove([storagePath]);
+        setMessage(`相簿儲存失敗：${imageRowError.message}`); setSaving(false); return;
+      }
       if (!imagePath && index === 0) {
         const { error: coverError } = await supabase.from("profiles").update({ card_image_path: storagePath }).eq("id", profileId);
         if (coverError) { setMessage(`封面設定失敗：${coverError.message}`); setSaving(false); return; }
@@ -135,7 +147,18 @@ export default function ProfileForm({ initial, cities = [], initialCityIds = [],
       }
       const videoDescription = String(form.get("profile_video_description") ?? "").trim();
       const { error: videoRowError } = await supabase.from("profile_images").insert({ profile_id: profileId, storage_path: storagePath, alt_text: videoDescription || `${payload.display_name}形象影片`, sort_order: existingImages.length + pendingImages.length + 1 });
-      if (videoRowError) { setMessage(`影片儲存失敗：${videoRowError.message}`); setSaving(false); return; }
+      if (videoRowError) {
+        await supabase.storage.from("site-media").remove([storagePath]);
+        setMessage(`影片儲存失敗：${videoRowError.message}`); setSaving(false); return;
+      }
+    }
+    for (const image of imagesToRemove) {
+      const { error: deleteRowError } = await supabase.from("profile_images").delete().eq("id", image.id);
+      if (deleteRowError) { setMessage(`相簿更新失敗：${deleteRowError.message}`); setSaving(false); return; }
+      if (isOwnedMediaPath(image.storage_path)) {
+        const { error: cleanupError } = await supabase.storage.from("site-media").remove([image.storage_path]);
+        if (cleanupError) console.error("相簿資料已更新，但舊媒體清理失敗", cleanupError);
+      }
     }
     const destinationCityId = returnCityId || cityIds[0] || "";
     await refreshPublicContent(["profiles", "regions"]).catch(() => undefined);

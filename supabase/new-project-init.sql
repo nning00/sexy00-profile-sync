@@ -1,7 +1,9 @@
 create extension if not exists pgcrypto;
 
 create or replace function public.set_updated_at()
-returns trigger language plpgsql as $$
+returns trigger language plpgsql
+set search_path = ''
+as $$
 begin
   new.updated_at = now();
   return new;
@@ -153,6 +155,11 @@ create table if not exists public.site_settings (
   updated_at timestamptz not null default now()
 );
 
+create index if not exists article_images_article_id_idx on public.article_images(article_id);
+create index if not exists articles_category_id_idx on public.articles(category_id);
+create index if not exists profile_cities_city_id_idx on public.profile_cities(city_id);
+create index if not exists profile_images_profile_id_idx on public.profile_images(profile_id);
+
 drop trigger if exists regions_updated_at on public.regions;
 create trigger regions_updated_at before update on public.regions for each row execute function public.set_updated_at();
 drop trigger if exists cities_updated_at on public.cities;
@@ -167,8 +174,8 @@ drop trigger if exists settings_updated_at on public.site_settings;
 create trigger settings_updated_at before update on public.site_settings for each row execute function public.set_updated_at();
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('site-media', 'site-media', true, 52428800, array['image/jpeg','image/png','image/webp','image/avif','video/mp4','video/webm'])
-on conflict (id) do update set public = true, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+values ('site-media', 'site-media', false, 52428800, array['image/jpeg','image/png','image/webp','image/avif','video/mp4','video/webm'])
+on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
 grant usage on schema public to anon, authenticated;
 grant all on all tables in schema public to anon, authenticated;

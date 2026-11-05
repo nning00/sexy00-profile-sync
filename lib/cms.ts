@@ -25,8 +25,7 @@ export type ArticleCategory = { id: string; name: string; slug: string; sort_ord
 export function mediaUrl(path: string | null | undefined) {
   if (!path) return "/placeholders/hero.svg";
   if (/^https?:\/\//.test(path) || path.startsWith("/")) return path;
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  return base ? `${base}/storage/v1/object/public/site-media/${path}` : "/placeholders/hero.svg";
+  return `/api/media?path=${encodeURIComponent(path)}`;
 }
 
 export function serviceMediaUrl(path: string | null | undefined, fallback: string | null | undefined) {
