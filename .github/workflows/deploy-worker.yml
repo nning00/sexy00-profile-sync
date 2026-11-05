@@ -12,6 +12,7 @@ on:
       - "public/**"
       - "package.json"
       - "pnpm-lock.yaml"
+      - "proxy.ts"
       - "vinext.config.*"
       - "wrangler.jsonc"
       - ".github/workflows/deploy-worker.yml"
