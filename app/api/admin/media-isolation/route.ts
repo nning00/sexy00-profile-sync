@@ -72,7 +72,9 @@ function imageType(bytes: Uint8Array) {
 async function copyImage(source: string) {
   const refs = await references(source);
   if (!refs.length) return { skipped: true, updated: 0 };
-  const response = await fetch(source, { redirect: "error", signal: AbortSignal.timeout(25000) });
+  // Workers only implements follow/manual. Reject redirects without following
+  // them so an allowed source cannot redirect this privileged fetch elsewhere.
+  const response = await fetch(source, { redirect: "manual", signal: AbortSignal.timeout(25000) });
   if (!response.ok || !response.body) throw new Error(`Source unavailable (${response.status}); references preserved`);
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
