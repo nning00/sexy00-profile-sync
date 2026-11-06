@@ -49,7 +49,7 @@ export default function MediaIsolation() {
           await new Promise(resolve => setTimeout(resolve, 150));
         }
       }
-      await Promise.all(Array.from({ length: 8 }, () => worker()));
+      await Promise.all(Array.from({ length: 16 }, () => worker()));
       const final = await call("finish");
       setMessage(`${stopped.current ? "已停止" : "本輪完成"}；仍有 ${final.remainingSources} 張外站圖片、${final.remainingReferences} 筆引用待處理。失敗引用保留，可再次執行。`);
     } catch (error) { setMessage(error instanceof Error ? error.message : "執行失敗"); }
