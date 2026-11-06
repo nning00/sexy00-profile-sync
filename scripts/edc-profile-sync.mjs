@@ -160,7 +160,7 @@ async function postPayload(payload) {
     body: JSON.stringify(payload),
   });
   const result = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-  if (!response.ok && response.status !== 207) throw new Error(JSON.stringify(result));
+  if (!response.ok && response.status !== 207) throw new Error(`HTTP ${response.status}: ${JSON.stringify(result)}`);
   return result;
 }
 
@@ -174,6 +174,8 @@ function errorMessage(error) {
 
 loadLocalEnv();
 const commit = process.argv.includes("--commit");
+const snapshotCheck = process.argv.includes("--snapshot-check");
+if (commit && (!process.env.PROFILE_SYNC_ENDPOINT || !process.env.PROFILE_SYNC_SECRET)) throw new Error("Commit requires endpoint and secret; no sync was performed");
 const selectedCity = argValue("--city") || "";
 const limit = Math.max(Number(argValue("--limit") || "0"), 0);
 if (selectedCity && !knownCities.has(selectedCity)) throw new Error(`不支援的城市：${selectedCity}`);
@@ -188,7 +190,12 @@ writeFileSync(outputPath, JSON.stringify({ capturedAt, candidateCount: profiles.
 console.log(`預覽資料：${outputPath}`);
 console.log(`候選 ${profiles.length} 筆；可確認成年 ${syncableProfiles.length} 筆；待後台確認成年 ${pendingReviewProfiles.length} 筆；${[...new Set(profiles.map((profile) => profile.cityName))].length} 個城市`);
 
-if (process.env.PROFILE_SYNC_ENDPOINT && process.env.PROFILE_SYNC_SECRET) {
+if (snapshotCheck) {
+  if (!process.env.PROFILE_SYNC_ENDPOINT || !process.env.PROFILE_SYNC_SECRET) throw new Error("Snapshot check requires endpoint and secret");
+  if (selectedCity || limit) throw new Error("Snapshot check requires the complete source catalogue");
+  const response = await postPayload({ mode: "preview", capturedAt, profiles: [], finalizeSnapshot: true, snapshotSourceKeys: profiles.map((profile) => profile.sourceKey) });
+  console.log(`唯讀收尾檢查（未修改任何資料）：${JSON.stringify(response)}`);
+} else if (process.env.PROFILE_SYNC_ENDPOINT && process.env.PROFILE_SYNC_SECRET) {
   const chunks = [];
   // Keep each request small because a batch also downloads several remote images.
   // This avoids cPanel/Cloudflare request timeouts during a full catalogue sync.
@@ -235,7 +242,11 @@ if (process.env.PROFILE_SYNC_ENDPOINT && process.env.PROFILE_SYNC_SECRET) {
     await new Promise((resolve) => setTimeout(resolve, 350));
   }
   if (commit && !selectedCity && limit === 0 && totals.errors === 0) {
-    await postPayload({ mode: "commit", capturedAt, profiles: [], finalizeSnapshot: true, snapshotSourceKeys: profiles.map((profile) => profile.sourceKey) });
+    const finalization = await postPayload({ mode: "commit", capturedAt, profiles: [], finalizeSnapshot: true, snapshotSourceKeys: profiles.map((profile) => profile.sourceKey) });
+    console.log(`同步收尾：${JSON.stringify(finalization)}`);
+    if (finalization?.snapshot?.status === "blocked") {
+      console.warn("::warning::資料已同步，但來源筆數下降觸發保護，未封存既有資料。請檢查收尾摘要，不代表來源已全數匹配。");
+    }
   }
   console.log(JSON.stringify(totals, null, 2));
   if (totals.errors) throw new Error(`同步完成但有 ${totals.errors} 筆錯誤；已保留既有資料並略過封存，下次排程會重試。`);

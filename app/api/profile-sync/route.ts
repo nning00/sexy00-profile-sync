@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { serializeProfileDetails, type ProfileDetails } from "@/lib/profile-details";
 import { isOwnedMediaPath, scopedMediaPath } from "@/lib/site-instance";
+import { archiveSnapshot, prepareSnapshot, snapshotSummary, syncErrorMessage } from "@/lib/profile-sync-snapshot";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -15,7 +16,6 @@ const MAX_PROFILES = 100;
 const MAX_SNAPSHOT_KEYS = 50000;
 const MAX_IMAGES_PER_PROFILE = 3;
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
-const MIN_SAFE_SNAPSHOT_RATIO = 0.6;
 
 type SourceImage = { url: string; alt?: string };
 type SourceProfile = {
@@ -258,6 +258,33 @@ export async function POST(request: Request) {
   }
   const mode = body.mode === "commit" ? "commit" : "preview";
   const capturedAt = body.capturedAt && !Number.isNaN(Date.parse(body.capturedAt)) ? body.capturedAt : new Date().toISOString();
+  if (body.finalizeSnapshot && (body.profiles.length !== 0 || !body.capturedAt || Number.isNaN(Date.parse(body.capturedAt)))) {
+    return NextResponse.json({ error: "Snapshot requires an explicit timestamp and no profile mutations" }, { status: 400 });
+  }
+  // Finalization is separate from the image/profile import. Previewing this
+  // path performs the same complete reads and safety checks but never writes.
+  if (body.finalizeSnapshot) {
+    try {
+      const supabase = createAdminClient();
+      const plan = await prepareSnapshot(supabase, PROVIDER, uniqueSnapshotSourceKeys, capturedAt);
+      const snapshot = snapshotSummary(plan);
+      if (mode === "preview") return NextResponse.json({ ok: true, mode, snapshot, archived: 0 }, { headers: { "Cache-Control": "no-store" } });
+      const archived = await archiveSnapshot(supabase, PROVIDER, plan, capturedAt);
+      const { error } = await supabase.from("profile_sync_runs").insert({
+        provider: PROVIDER, mode: "snapshot", status: plan.status === "blocked" ? "blocked" : "success",
+        summary: { ...snapshot, archived }, completed_at: new Date().toISOString(),
+      });
+      if (error) throw new Error(`snapshot-history-write: ${syncErrorMessage(error)}`);
+      // Completed imports still need to appear even when archival is blocked.
+      revalidateTag("profiles", { expire: 0 });
+      revalidateTag("regions", { expire: 0 });
+      revalidatePath("/", "layout");
+      revalidatePath("/sitemap.xml");
+      return NextResponse.json({ ok: true, mode, snapshot, archived }, { headers: { "Cache-Control": "no-store" } });
+    } catch (error) {
+      return NextResponse.json({ error: syncErrorMessage(error), stage: "snapshot-finalize" }, { status: 500, headers: { "Cache-Control": "no-store" } });
+    }
+  }
   const normalizedProfiles = body.profiles.map(normalizeProfile).filter((profile): profile is NonNullable<ReturnType<typeof normalizeProfile>> => Boolean(profile));
   const invalidCount = body.profiles.length - normalizedProfiles.length;
   const duplicateSourceKeys = normalizedProfiles.filter((profile, index, all) => all.findIndex((candidate) => candidate.sourceKey === profile.sourceKey) !== index).map((profile) => profile.sourceKey);
@@ -326,12 +353,13 @@ export async function POST(request: Request) {
           : "pending";
       const targetStatus = reviewStatus === "verified" ? "published" : reviewStatus === "rejected" ? "archived" : "draft";
       if (current?.source_content_hash === profile.contentHash) {
-        await supabase.from("profiles").update({
+        const { error: refreshError } = await supabase.from("profiles").update({
           source_last_seen_at: capturedAt,
           status: targetStatus,
           adult_review_status: reviewStatus,
           adult_verified_at: reviewStatus === "verified" ? current.adult_verified_at || capturedAt : null,
         }).eq("id", current.id);
+        if (refreshError) throw refreshError;
         result.unchanged += 1;
         continue;
       }
@@ -382,59 +410,8 @@ export async function POST(request: Request) {
       if (current) result.updated += 1;
       else result.created += 1;
     } catch (error) {
-      result.errors.push({ sourceKey: profile.sourceKey, message: error instanceof Error ? error.message : "unknown-error" });
+      result.errors.push({ sourceKey: profile.sourceKey, message: syncErrorMessage(error) });
     }
-  }
-
-  if (body.finalizeSnapshot && result.errors.length === 0) {
-    const activeExisting = (existing ?? []).filter((profile) => profile.status !== "archived");
-    const { data: previousRuns } = await supabase
-      .from("profile_sync_runs")
-      .select("summary")
-      .eq("provider", PROVIDER)
-      .eq("mode", "snapshot")
-      .eq("status", "success")
-      .order("completed_at", { ascending: false })
-      .limit(20);
-    const previousSnapshotCounts = (previousRuns ?? []).flatMap((run) => {
-      const count = Number((run.summary as Record<string, unknown> | null)?.snapshotCount);
-      return Number.isSafeInteger(count) && count > 0 ? [count] : [];
-    });
-    const referenceCount = Math.max(activeExisting.length, ...previousSnapshotCounts, 0);
-    const minimumSafeCount = referenceCount >= 100
-      ? Math.floor(referenceCount * MIN_SAFE_SNAPSHOT_RATIO)
-      : Math.max(1, referenceCount - 20);
-    if (uniqueSnapshotSourceKeys.length < minimumSafeCount) {
-      const blockedSummary = {
-        snapshotCount: uniqueSnapshotSourceKeys.length,
-        referenceCount,
-        minimumSafeCount,
-        reason: "snapshot-count-drop",
-      };
-      await supabase.from("profile_sync_runs").insert({
-        provider: PROVIDER,
-        mode: "snapshot",
-        status: "blocked",
-        summary: blockedSummary,
-        completed_at: new Date().toISOString(),
-      });
-      return NextResponse.json({ error: "Snapshot completeness check failed", summary: blockedSummary }, { status: 409 });
-    }
-
-    const seen = new Set(uniqueSnapshotSourceKeys);
-    const missing = activeExisting.filter((profile) => !seen.has(profile.source_key));
-    if (missing.length) {
-      const { error } = await supabase.from("profiles").update({ status: "archived" }).in("id", missing.map((profile) => profile.id));
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      result.archived = missing.length;
-    }
-    await supabase.from("profile_sync_runs").insert({
-      provider: PROVIDER,
-      mode: "snapshot",
-      status: "success",
-      summary: { snapshotCount: uniqueSnapshotSourceKeys.length, referenceCount, archived: result.archived },
-      completed_at: new Date().toISOString(),
-    });
   }
 
   // A full import can contain hundreds of batches. Revalidating the entire
