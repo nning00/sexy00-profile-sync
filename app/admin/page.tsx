@@ -39,6 +39,7 @@ export default async function AdminPage() {
         <Link href="/admin/articles"><span>05</span><div><h2>熱門文章與 SEO</h2><p>新增不限數量的文章，管理草稿、發布及搜尋資訊。</p></div><i>→</i></Link>
         <Link href="/admin/seo"><span>06</span><div><h2>SEO 健康檢查</h2><p>集中查看重複標題、重複描述、城市內容缺漏與文章 SEO 狀態。</p></div><i>→</i></Link>
         <Link href="/admin/profiles/adult-review"><span>07</span><div><h2>待確認成年資料{pendingAdultCount ? `（${pendingAdultCount}）` : ""}</h2><p>檢查來源未公開年齡的形象；確認已滿 18 歲後才會發布到前台。</p></div><i>→</i></Link>
+        <Link href="/admin/media-isolation"><span>08</span><div><h2>圖片獨立化與修復備份</h2><p>將舊站圖片安全複製到本網站，查看搬移進度，或恢復缺圖修復前的相簿引用。</p></div><i>→</i></Link>
       </section>
     </main>
   );
