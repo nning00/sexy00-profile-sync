@@ -9,6 +9,7 @@ export const runtime = "nodejs";
 const TARGET = "https://kkxsclcqdxoiqucunpur.supabase.co";
 const SOURCE = "https://skufoegiyibyzkwefasf.supabase.co/storage/v1/object/public/site-media/";
 const BUCKET = "site-media";
+const BACKUP_BUCKET = "sexy00-maintenance";
 const BACKUP = "maintenance/media-isolation-20261107";
 const BROKEN_PROFILE = "e412efac-b97b-4204-a908-cf52a8cd5459";
 const BROKEN_HASHES = ["1cc13b122d60eec8b2f3d010", "40d7525d9c1572ee0ec64e66", "540b94e87a2793b1a158ecbc"];
@@ -40,7 +41,14 @@ async function references(source?: string) {
 }
 
 async function backup(name: string, value: unknown) {
-  const result = await createAdminClient().storage.from(BUCKET).upload(`${BACKUP}/${name}.json`, JSON.stringify(value), { contentType: "application/json", upsert: false });
+  const storage = createAdminClient().storage;
+  const existing = await storage.getBucket(BACKUP_BUCKET);
+  if (existing.error) {
+    if (String(existing.error.statusCode) !== "404") throw new Error("Unable to check private backup bucket");
+    const created = await storage.createBucket(BACKUP_BUCKET, { public: false, allowedMimeTypes: ["application/json"], fileSizeLimit: 10 * 1024 * 1024 });
+    if (created.error && String(created.error.statusCode) !== "409") throw new Error("Unable to create private backup bucket");
+  } else if (existing.data.public) throw new Error("Backup bucket must be private");
+  const result = await storage.from(BACKUP_BUCKET).upload(`${BACKUP}/${name}.json`, JSON.stringify(value), { contentType: "application/json", upsert: false });
   if (result.error && String(result.error.statusCode) !== "409") throw new Error("Backup failed; no references changed");
 }
 
@@ -138,7 +146,7 @@ export async function POST(request: Request) {
     }
     if (body.action === "repair") return json(await repairBrokenReferences());
     if (body.action === "restore-gallery") {
-      const saved = await createAdminClient().storage.from(BUCKET).download(`${BACKUP}/stale-gallery.json`);
+      const saved = await createAdminClient().storage.from(BACKUP_BUCKET).download(`${BACKUP}/stale-gallery.json`);
       if (saved.error || !saved.data) return json({ error: "Gallery backup unavailable" }, 404);
       const manifest = JSON.parse(await saved.data.text());
       const rows = manifest.removedRows as Array<Record<string, unknown>>;
