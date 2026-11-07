@@ -142,3 +142,32 @@ returns table(path text) language sql stable security invoker set search_path=pg
 $$;
 revoke all on function public.sexy00_gc_allowed(text[]) from public,anon,authenticated;
 grant execute on function public.sexy00_gc_allowed(text[]) to service_role;
+
+-- Called only after an authenticated sync supplied an explicit empty image
+-- array. A row lock and fresh child checks protect concurrently added photos.
+create or replace function public.sexy00_remove_photoless_profile(p_source_key text,p_captured_at timestamptz)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $$
+declare target public.profiles%rowtype; deleted_count integer;
+begin
+  if p_source_key is null or p_source_key !~ '^[0-9]{1,80}$' or p_captured_at is null
+    or p_captured_at>now()+interval '5 minutes' or p_captured_at<now()-interval '4 hours' then
+    raise exception 'Invalid no-photo cleanup request';
+  end if;
+  if not pg_try_advisory_xact_lock(hashtextextended('sexy00-profile-cleanup',0)) then raise exception 'Cleanup is already running'; end if;
+  select * into target from public.profiles where source_provider='edc-public-catalog' and source_key=p_source_key for update;
+  if not found then return jsonb_build_object('action','skipped-empty','removed',0); end if;
+  if target.source_last_seen_at>p_captured_at then return jsonb_build_object('action','retained-newer','removed',0); end if;
+  if nullif(btrim(target.card_image_path),'') is not null
+    or exists(select 1 from public.profile_images where profile_id=target.id)
+    or exists(select 1 from public.profile_source_images where profile_id=target.id) then
+    update public.profiles set source_last_seen_at=p_captured_at where id=target.id;
+    return jsonb_build_object('action','retained-photos','removed',0);
+  end if;
+  delete from public.profiles where id=target.id and source_provider='edc-public-catalog' and source_key=p_source_key;
+  get diagnostics deleted_count=row_count;
+  insert into public.profile_sync_runs(provider,mode,status,summary,completed_at)
+    values('edc-public-catalog','maintenance','success',jsonb_build_object('reason','no-source-photos','removed',deleted_count),now());
+  return jsonb_build_object('action','removed','removed',deleted_count);
+end; $$;
+revoke all on function public.sexy00_remove_photoless_profile(text,timestamptz) from public,anon,authenticated;
+grant execute on function public.sexy00_remove_photoless_profile(text,timestamptz) to service_role;

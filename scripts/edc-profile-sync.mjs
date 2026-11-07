@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { requireSourceImages } from "./profile-source-images.mjs";
 
 const projectRoot = resolve(import.meta.dirname, "..");
 const localEnvPaths = [join(projectRoot, ".env.sync.local"), join(projectRoot, ".env.local")];
@@ -102,7 +103,7 @@ function normalizeProduct(product) {
     notAccepted: sourceValue(field(text, "不接受", ["加價購", "優惠方案"])),
     surcharge: sourceValue(field(text, "加價購", ["優惠方案"])),
     promotion: sourceValue(field(text, "優惠方案", [])),
-    images: (product.images || []).slice(0, 3).map((image) => ({
+    images: requireSourceImages(product.images).slice(0, 3).map((image) => ({
       url: image.thumbnail || image.src,
       alt: decodeHtml(image.alt || image.name || `${city}${serviceMethod} ${displayName}`),
     })),
@@ -190,6 +191,19 @@ const commit = process.argv.includes("--commit");
 const snapshotCheck = process.argv.includes("--snapshot-check");
 const cleanupOnly=process.argv.includes("--cleanup-only");
 const cleanupCheck=process.argv.includes("--cleanup-check");
+if(process.argv.includes("--photo-policy-check")){
+  if(!process.env.PROFILE_SYNC_ENDPOINT||!process.env.PROFILE_SYNC_SECRET)throw new Error("Photo policy check requires configured endpoint and secret");
+  const fixture={sourceUrl:"https://edc.com.tw/photo-policy-preview/",displayName:"Read-only photo policy fixture",cityName:"__preview_only__"};
+  const response=await postPayload({mode:"preview",profiles:[
+    {...fixture,sourceKey:"00000000000000001",images:[]},
+    {...fixture,sourceKey:"00000000000000002"},
+    {...fixture,sourceKey:"00000000000000003",images:[{url:"https://example.invalid/rejected.jpg"}]},
+  ]});
+  const actions=response?.items?.map(item=>item.action);
+  if(response?.photoPolicyVersion!==1 || JSON.stringify(actions)!==JSON.stringify(["skip-no-photos","invalid-photo-data","invalid-photo-data"]))throw new Error("Photo policy preview did not pass; no mutation was requested");
+  console.log("No-photo policy preview passed: explicit empty photos skipped; missing/invalid photo data rejected; no writes requested.");
+  process.exit(0);
+}
 async function drainMediaQueue(preview=false,maxBatches=12){
   for(let batch=0;batch<maxBatches;batch++){
     const r=await postPayload({mode:preview?"preview":"commit",profiles:[],cleanupOnly:true,queueOrphans:batch===0});
@@ -233,7 +247,7 @@ if (snapshotCheck) {
   for (let index = 0; index < profiles.length; index += batchSize) {
     chunks.push(profiles.slice(index, index + batchSize));
   }
-  const totals = { create: 0, update: 0, unchanged: 0, pendingReview: 0, skippedCity: 0, warnings: 0, errors: 0 };
+  const totals = { create: 0, update: 0, unchanged: 0, pendingReview: 0, skippedCity: 0, noPhotos: 0, removedNoPhotos: 0, warnings: 0, errors: 0 };
   for (const [index, chunk] of chunks.entries()) {
     let response;
     let terminalHttpError = "";
@@ -256,7 +270,8 @@ if (snapshotCheck) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
       continue;
     }
-    for (const key of ["create", "update", "unchanged", "pendingReview", "skippedCity"]) totals[key] += response?.summary?.[key] || 0;
+    for (const key of ["create", "update", "unchanged", "pendingReview", "skippedCity", "noPhotos"]) totals[key] += response?.summary?.[key] || 0;
+    totals.removedNoPhotos += response?.result?.removedNoPhotos || 0;
     const responseErrors = response?.result?.errors || [];
     const warningErrors = responseErrors.filter((item) => item?.message === "image-download-404");
     const blockingErrors = responseErrors.filter((item) => item?.message !== "image-download-404");

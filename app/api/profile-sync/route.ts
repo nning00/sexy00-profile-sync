@@ -6,6 +6,7 @@ import { serializeProfileDetails, type ProfileDetails } from "@/lib/profile-deta
 import { isOwnedMediaPath, scopedMediaPath } from "@/lib/site-instance";
 import { prepareSnapshot, snapshotSummary, syncErrorMessage } from "@/lib/profile-sync-snapshot";
 import { assertCleanupTarget, collectUnusedProfileMedia, safeProfileMediaPath } from "@/lib/profile-media-gc";
+import { sourcePhotoState, hasProfilePhotos, photoImportStagingStatus } from "@/lib/profile-photo-policy";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -139,14 +140,16 @@ function normalizeProfile(input: SourceProfile) {
     surcharge: clean(input.surcharge),
     promotion: clean(input.promotion),
   };
-  const images = (Array.isArray(input.images) ? input.images : [])
+  const normalizedImages = (Array.isArray(input.images) ? input.images : [])
     .map(normalizedImage)
-    .filter((image): image is SourceImage => Boolean(image))
+    .filter((image): image is SourceImage => Boolean(image));
+  const photoState = sourcePhotoState(input.images, normalizedImages.length);
+  const images = normalizedImages
     .filter((image, index, all) => all.findIndex((candidate) => candidate.url === image.url) === index)
     .slice(0, MAX_IMAGES_PER_PROFILE);
   const normalized = { sourceKey, sourceUrl, displayName, cityName, details, images };
   const contentHash = createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
-  return { ...normalized, contentHash, verifiedAdult: (ageNumber(details.age) ?? 0) >= 18 };
+  return { ...normalized, photoState, contentHash, verifiedAdult: (ageNumber(details.age) ?? 0) >= 18 };
 }
 
 function fileExtension(contentType: string | null, sourceUrl: string) {
@@ -307,7 +310,7 @@ export async function POST(request: Request) {
   const supabase = createAdminClient();
   let existingQuery = supabase
     .from("profiles")
-    .select("id,source_key,source_content_hash,status,slug,adult_review_status,adult_verified_at,adult_verified_by")
+    .select("id,source_key,source_content_hash,status,slug,card_image_path,profile_images(id),adult_review_status,adult_verified_at,adult_verified_by")
     .eq("source_provider", PROVIDER);
   // Normal sync requests contain only a few records. Querying every imported
   // profile for every batch was the main source of Worker CPU and database
@@ -333,7 +336,11 @@ export async function POST(request: Request) {
       : current?.adult_review_status === "verified" || current?.adult_review_status === "rejected"
         ? current.adult_review_status
         : "pending";
-    const action = !city
+    const action = profile.photoState === "invalid"
+      ? "invalid-photo-data"
+      : profile.photoState === "empty"
+        ? "skip-no-photos"
+        : !city
       ? "skip-city"
       : reviewStatus === "rejected"
         ? "rejected"
@@ -351,14 +358,25 @@ export async function POST(request: Request) {
     unchanged: preview.filter((item) => item.action === "unchanged").length,
     pendingReview: preview.filter((item) => ["create-pending", "update-pending", "pending"].includes(item.action)).length,
     skippedCity: preview.filter((item) => item.action === "skip-city").length,
+    noPhotos: preview.filter((item) => item.action === "skip-no-photos").length,
   };
-  if (mode === "preview") return NextResponse.json({ ok: true, mode, summary, items: preview });
+  if (mode === "preview") return NextResponse.json({ ok: true, photoPolicyVersion:1, mode, summary, items: preview });
 
-  const result = { created: 0, updated: 0, unchanged: 0, skipped: invalidCount, archived: 0, errors: [] as Array<{ sourceKey: string; message: string }> };
+  const result = { created: 0, updated: 0, unchanged: 0, skipped: invalidCount, archived: 0, removedNoPhotos:0, errors: [] as Array<{ sourceKey: string; message: string }> };
   for (const profile of normalizedProfiles) {
     const city = cityByName.get(profile.cityName);
-    if (!city) { result.skipped += 1; continue; }
     try {
+      if(profile.photoState === "invalid")throw new Error("invalid-photo-data; existing profile preserved");
+      if(profile.photoState === "empty"){
+        assertCleanupTarget();
+        const removed=await supabase.rpc("sexy00_remove_photoless_profile",{p_source_key:profile.sourceKey,p_captured_at:capturedAt});
+        if(removed.error)throw new Error(`no-photo-cleanup: ${syncErrorMessage(removed.error)}`);
+        if(!["removed","skipped-empty","retained-photos","retained-newer"].includes(removed.data?.action))throw new Error("Unexpected no-photo cleanup result");
+        result.removedNoPhotos+=removed.data?.removed??0;
+        result.skipped+=1;
+        continue;
+      }
+      if (!city) { result.skipped += 1; continue; }
       const current = existingByKey.get(profile.sourceKey);
       const reviewStatus = profile.verifiedAdult
         ? "verified"
@@ -366,7 +384,7 @@ export async function POST(request: Request) {
           ? current.adult_review_status
           : "pending";
       const targetStatus = reviewStatus === "verified" ? "published" : reviewStatus === "rejected" ? "archived" : "draft";
-      if (current?.source_content_hash === profile.contentHash) {
+      if (current?.source_content_hash === profile.contentHash && hasProfilePhotos(current)) {
         const { error: refreshError } = await supabase.from("profiles").update({
           source_last_seen_at: capturedAt,
           status: targetStatus,
@@ -393,7 +411,7 @@ export async function POST(request: Request) {
         style: "",
         interest: "",
         introduction: serializeProfileDetails(profile.details),
-        status: targetStatus,
+        status: photoImportStagingStatus(current),
         sort_order: 99,
         seo_title: seoTitle,
         seo_description: seoDescription,
@@ -419,7 +437,7 @@ export async function POST(request: Request) {
       const { error: assignmentDeleteError } = await supabase.from("profile_cities").delete().eq("profile_id", profileId).neq("city_id", city.id);
       if (assignmentDeleteError) throw assignmentDeleteError;
       const coverPath = await syncImages(profileId, profile.displayName, profile.images);
-      const { error: coverError } = await supabase.from("profiles").update({ card_image_path: coverPath, source_content_hash: profile.contentHash }).eq("id", profileId);
+      const { error: coverError } = await supabase.from("profiles").update({ card_image_path: coverPath, source_content_hash: profile.contentHash, status: targetStatus }).eq("id", profileId);
       if (coverError) throw coverError;
       if (current) result.updated += 1;
       else result.created += 1;
