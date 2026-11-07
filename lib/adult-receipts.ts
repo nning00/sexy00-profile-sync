@@ -16,15 +16,19 @@ export async function saveAdultReceipt(db: Db, profileId: string, reviewer: stri
   // Old receipts whose photos postdate the review are preserved, not rebound.
   const canBind = rows.length > 0 && rows.length <= 3 && rows.every((row) =>
     safeProfileMediaPath(row.storage_path) && (reviewer || profile.adult_verified_at && Date.parse(row.created_at) <= Date.parse(profile.adult_verified_at)));
-  const photos = [];
-  if (canBind) for (const row of rows) {
-    const download = await db.storage.from("site-media").download(row.storage_path);
-    if (download.error || !download.data || !download.data.size || download.data.size > MAX_BYTES) {
-      if(!reviewer){photos.length=0;break;}
-      throw new Error("確認照片暫時無法讀取；未發布，請稍後重試。");
+  let photos: Array<{source_url:string;storage_path:string;sha256:string}>=[];
+  if (canBind) {
+    try {
+      photos=await Promise.all(rows.map(async row=>{
+        const download = await db.storage.from("site-media").download(row.storage_path);
+        if (download.error || !download.data || !download.data.size || download.data.size > MAX_BYTES) throw new Error("Photo evidence unavailable");
+        const hash = createHash("sha256").update(new Uint8Array(await download.data.arrayBuffer())).digest("hex");
+        return { source_url: row.source_url, storage_path: row.storage_path, sha256: hash };
+      }));
+    }catch{
+      if(reviewer)throw new Error("確認照片暫時無法讀取；未發布，請稍後重試。");
+      photos=[];
     }
-    const hash = createHash("sha256").update(new Uint8Array(await download.data.arrayBuffer())).digest("hex");
-    photos.push({ source_url: row.source_url, storage_path: row.storage_path, sha256: hash });
   }
   if (reviewer && !canBind) throw new Error("需先有完整來源照片並完成同步，才能保存成年確認。");
   const saved = await db.rpc("sexy00_save_adult_receipt", {
@@ -39,7 +43,7 @@ export async function backfillAdultReceipts(db: Db) {
   const pending = await db.from("adult_verification_receipts").select("source_key,content_hash,last_profile_id")
     .eq("evidence_state", "legacy-unbound").order("source_key").limit(5);
   if (pending.error) throw pending.error;
-  for (const row of pending.data ?? []) {
+  async function prepare(row:{source_key:string;content_hash:string;last_profile_id:string}) {
     try{await saveAdultReceipt(db, row.last_profile_id, null);}
     catch{
       // A deleted/changed legacy row cannot be safely rebound. Keep its receipt.
@@ -48,6 +52,8 @@ export async function backfillAdultReceipts(db: Db) {
       if(kept.error)throw kept.error;
     }
   }
+  // At most two profiles / six small owned Storage reads at once. No source crawl.
+  for(let index=0;index<(pending.data?.length ?? 0);index+=2)await Promise.all(pending.data!.slice(index,index+2).map(prepare));
   const remaining = await db.from("adult_verification_receipts").select("source_key", { count: "exact", head: true }).eq("evidence_state", "legacy-unbound");
   if (remaining.error) throw remaining.error;
   return { processed: pending.data?.length ?? 0, remaining: remaining.count ?? 0 };
