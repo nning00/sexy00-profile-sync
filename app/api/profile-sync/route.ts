@@ -7,7 +7,7 @@ import { isOwnedMediaPath, scopedMediaPath } from "@/lib/site-instance";
 import { prepareSnapshot, snapshotSummary, syncErrorMessage } from "@/lib/profile-sync-snapshot";
 import { assertCleanupTarget, collectUnusedProfileMedia, safeProfileMediaPath } from "@/lib/profile-media-gc";
 import { sourcePhotoState, hasProfilePhotos, photoImportStagingStatus } from "@/lib/profile-photo-policy";
-import { receiptMatches, reviewDecision, type AdultReceipt } from "@/lib/adult-receipt-policy";
+import { continueExistingApproval, receiptMatches, reviewDecision, type AdultReceipt } from "@/lib/adult-receipt-policy";
 import { backfillAdultReceipts } from "@/lib/adult-receipts";
 
 export const dynamic = "force-dynamic";
@@ -366,7 +366,8 @@ export async function POST(request: Request) {
   const preview = normalizedProfiles.map((profile) => {
     const current = existingByKey.get(profile.sourceKey);
     const city = cityByName.get(profile.cityName);
-    const reviewStatus = reviewDecision(profile.details.age,manualEvidence.has(profile.sourceKey),current?.adult_review_status === "rejected");
+    const continued=continueExistingApproval(current,profile.contentHash,profile.details.age,hasProfilePhotos(current));
+    const reviewStatus = reviewDecision(profile.details.age,manualEvidence.has(profile.sourceKey)||continued,current?.adult_review_status === "rejected");
     const action = profile.photoState === "invalid"
       ? "invalid-photo-data"
       : profile.photoState === "empty"
@@ -410,8 +411,9 @@ export async function POST(request: Request) {
       if (!city) { result.skipped += 1; continue; }
       const current = existingByKey.get(profile.sourceKey);
       const receipt = manualEvidence.get(profile.sourceKey);
-      const reviewStatus = reviewDecision(profile.details.age,!!receipt,current?.adult_review_status === "rejected");
-      const verifiedAt=reviewStatus === "verified" ? receipt?.verified_at || capturedAt : null;
+      const continued=continueExistingApproval(current,profile.contentHash,profile.details.age,hasProfilePhotos(current));
+      const reviewStatus = reviewDecision(profile.details.age,!!receipt||continued,current?.adult_review_status === "rejected");
+      const verifiedAt=reviewStatus === "verified" ? receipt?.verified_at || (continued ? current?.adult_verified_at : null) || capturedAt : null;
       const verifiedBy=reviewStatus === "verified" ? receipt?.verified_by || null : null;
       const targetStatus = reviewStatus === "verified" ? "published" : reviewStatus === "rejected" ? "archived" : "draft";
       if (current?.source_content_hash === profile.contentHash && hasProfilePhotos(current)) {

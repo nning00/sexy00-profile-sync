@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { receiptMatches, reviewDecision, samePhotoHashes, sourceAge } from '../lib/adult-receipt-policy.ts';
+import { continueExistingApproval, receiptMatches, reviewDecision, samePhotoHashes, sourceAge } from '../lib/adult-receipt-policy.ts';
 const a='a'.repeat(64), b='b'.repeat(64);
 const receipt={source_key:'101',content_hash:a,photo_hashes:[a,b],verified_at:'2026-01-01',verified_by:'fixture',last_profile_id:'old-row',evidence_state:'bound',revoked_at:null};
 test('exact identity and photo files can reuse manual approval after row recreation',()=>assert.equal(receiptMatches(receipt,'101',a,[b,a]),true));
@@ -23,3 +23,12 @@ test('ambiguous ages are not parsed as adult evidence',()=>{
 });
 test('source adult evidence works without fabricating a manual reviewer',()=>assert.equal(reviewDecision('20歲',false,false),'verified'));
 test('explicit rejections remain blocked',()=>assert.equal(reviewDecision('25',true,true),'rejected'));
+const legacy={source_content_hash:a,status:'published',adult_review_status:'verified',adult_verified_at:'2026-01-01',adult_verified_by:null};
+test('unchanged existing legacy approval is not unnecessarily taken offline',()=>assert.equal(continueExistingApproval(legacy,a,'',true),true));
+test('legacy state is not transferable to a recreated, changed, archived or photo-less row',()=>{
+ assert.equal(continueExistingApproval(undefined,a,'',true),false);
+ assert.equal(continueExistingApproval(legacy,b,'',true),false);
+ assert.equal(continueExistingApproval({...legacy,status:'archived'},a,'',true),false);
+ assert.equal(continueExistingApproval(legacy,a,'',false),false);
+ assert.equal(continueExistingApproval(legacy,a,'17',true),false);
+});
