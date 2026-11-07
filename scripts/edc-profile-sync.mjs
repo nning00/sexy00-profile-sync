@@ -191,6 +191,26 @@ const commit = process.argv.includes("--commit");
 const snapshotCheck = process.argv.includes("--snapshot-check");
 const cleanupOnly=process.argv.includes("--cleanup-only");
 const cleanupCheck=process.argv.includes("--cleanup-check");
+if(process.argv.includes("--adult-receipt-check") || process.argv.includes("--adult-receipt-backfill")){
+  if(!process.env.PROFILE_SYNC_ENDPOINT||!process.env.PROFILE_SYNC_SECRET)throw new Error("Receipt preparation requires endpoint and secret");
+  const endpoint=new URL(process.env.PROFILE_SYNC_ENDPOINT);
+  if(endpoint.origin!=="https://sexy00.cc" || endpoint.pathname!=="/api/profile-sync")throw new Error("Receipt target must be sexy00.cc");
+  const check=await postPayload({mode:"preview",profiles:[],adultReceiptBackfill:true});
+  if(check?.adultReceiptPolicyVersion!==1)throw new Error("Adult receipt policy not deployed");
+  if(process.argv.includes("--adult-receipt-backfill")){
+    for(let batch=0;batch<120;batch++){
+      const result=await postPayload({mode:"commit",profiles:[],adultReceiptBackfill:true});
+      if(!result?.ok || !Number.isSafeInteger(result.remaining))throw new Error("Adult receipt preparation failed");
+      console.log(`Existing manual receipts: prepared ${result.processed}, remaining ${result.remaining}. No new approvals made.`);
+      if(!result.remaining)process.exit(0);
+      if(!result.processed)throw new Error("Receipt preparation made no progress");
+      await new Promise(resolve=>setTimeout(resolve,500));
+    }
+    throw new Error("Receipt preparation batch limit reached");
+  }
+  console.log("Adult receipt read-only policy check passed.");
+  process.exit(0);
+}
 if(process.argv.includes("--photo-policy-check")){
   if(!process.env.PROFILE_SYNC_ENDPOINT||!process.env.PROFILE_SYNC_SECRET)throw new Error("Photo policy check requires configured endpoint and secret");
   const fixture={sourceUrl:"https://edc.com.tw/photo-policy-preview/",displayName:"Read-only photo policy fixture",cityName:"__preview_only__"};

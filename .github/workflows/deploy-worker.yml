@@ -31,6 +31,8 @@ jobs:
           node-version: "22"
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
+      - run: node --experimental-strip-types --test tests/*.test.mjs
+      - run: pnpm exec tsc --noEmit
       - run: pnpm build
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v3
@@ -38,6 +40,11 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.jsonc
+      - name: Preserve existing manual adult receipts (no new approvals)
+        env:
+          PROFILE_SYNC_ENDPOINT: ${{ secrets.PROFILE_SYNC_ENDPOINT }}
+          PROFILE_SYNC_SECRET: ${{ secrets.PROFILE_SYNC_SECRET }}
+        run: node scripts/edc-profile-sync.mjs --adult-receipt-backfill
       - name: Check no-photo policy (read-only)
         env:
           PROFILE_SYNC_ENDPOINT: ${{ secrets.PROFILE_SYNC_ENDPOINT }}

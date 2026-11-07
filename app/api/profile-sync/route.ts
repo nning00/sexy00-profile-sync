@@ -7,6 +7,8 @@ import { isOwnedMediaPath, scopedMediaPath } from "@/lib/site-instance";
 import { prepareSnapshot, snapshotSummary, syncErrorMessage } from "@/lib/profile-sync-snapshot";
 import { assertCleanupTarget, collectUnusedProfileMedia, safeProfileMediaPath } from "@/lib/profile-media-gc";
 import { sourcePhotoState, hasProfilePhotos, photoImportStagingStatus } from "@/lib/profile-photo-policy";
+import { receiptMatches, reviewDecision, type AdultReceipt } from "@/lib/adult-receipt-policy";
+import { backfillAdultReceipts } from "@/lib/adult-receipts";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -51,6 +53,7 @@ type SyncBody = {
   sourcePages?: number;
   cleanupOnly?: boolean;
   queueOrphans?: boolean;
+  adultReceiptBackfill?: boolean;
   profiles?: SourceProfile[];
 };
 
@@ -113,11 +116,6 @@ function normalizedImage(image: SourceImage): SourceImage | null {
   }
 }
 
-function ageNumber(value: string) {
-  const match = value.match(/\d{2}/);
-  return match ? Number(match[0]) : null;
-}
-
 function normalizeProfile(input: SourceProfile) {
   const sourceKey = clean(input.sourceKey, 80).toLowerCase().replace(/[^a-z0-9_-]/g, "");
   const sourceUrl = clean(input.sourceUrl, 500);
@@ -149,7 +147,7 @@ function normalizeProfile(input: SourceProfile) {
     .slice(0, MAX_IMAGES_PER_PROFILE);
   const normalized = { sourceKey, sourceUrl, displayName, cityName, details, images };
   const contentHash = createHash("sha256").update(JSON.stringify(normalized)).digest("hex");
-  return { ...normalized, photoState, contentHash, verifiedAdult: (ageNumber(details.age) ?? 0) >= 18 };
+  return { ...normalized, photoState, contentHash };
 }
 
 function fileExtension(contentType: string | null, sourceUrl: string) {
@@ -178,7 +176,7 @@ async function downloadImage(url: string) {
   return { bytes, contentType, extension: fileExtension(contentType, url) };
 }
 
-async function syncImages(profileId: string, displayName: string, images: SourceImage[]) {
+async function syncImages(profileId: string, displayName: string, images: SourceImage[], downloads = new Map<string, Awaited<ReturnType<typeof downloadImage>>>()) {
   const supabase = createAdminClient();
   const { data: trackedRows, error: trackedError } = await supabase
     .from("profile_source_images")
@@ -194,8 +192,8 @@ async function syncImages(profileId: string, displayName: string, images: Source
 
   for (const [index, image] of images.entries()) {
     let storagePath = tracked.get(image.url);
-    if (!storagePath) {
-      const downloaded = await downloadImage(image.url);
+    if (!storagePath || downloads.has(image.url)) {
+      const downloaded = downloads.get(image.url) ?? await downloadImage(image.url);
       const imageHash = createHash("sha256").update(image.url).digest("hex").slice(0, 24);
       storagePath = scopedMediaPath(`profiles/synced/${profileId}/${imageHash}.${downloaded.extension}`);
       const { error: uploadError } = await supabase.storage.from("site-media").upload(storagePath, downloaded.bytes, {
@@ -269,6 +267,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid sync payload" }, { status: 400 });
   }
   const mode = body.mode === "commit" ? "commit" : "preview";
+  if (body.adultReceiptBackfill) {
+    if (body.profiles.length || body.finalizeSnapshot || body.cleanupOnly) return NextResponse.json({error:"Invalid receipt payload"},{status:400});
+    if (mode !== "commit") return NextResponse.json({ok:true, adultReceiptPolicyVersion:1}, {headers:{"Cache-Control":"no-store"}});
+    try { return NextResponse.json({ok:true,...await backfillAdultReceipts(createAdminClient())},{headers:{"Cache-Control":"no-store"}}); }
+    catch { return NextResponse.json({error:"Receipt preparation failed; no new approvals made"},{status:500}); }
+  }
   if(body.cleanupOnly){
     if(body.profiles.length || body.finalizeSnapshot) return NextResponse.json({error:"Invalid cleanup payload"},{status:400});
     try{return NextResponse.json({ok:true,...await collectUnusedProfileMedia(createAdminClient(),mode==="commit",body.queueOrphans===true)},{headers:{"Cache-Control":"no-store"}});}
@@ -328,14 +332,41 @@ export async function POST(request: Request) {
   if (cityError || existingError) return NextResponse.json({ error: cityError?.message || existingError?.message }, { status: 500 });
   const cityByName = new Map((cities ?? []).map((city) => [city.name, city]));
   const existingByKey = new Map((existing ?? []).map((profile) => [profile.source_key, profile]));
+  const receiptRead = normalizedProfiles.length ? await supabase.from("adult_verification_receipts")
+    .select("source_key,content_hash,photo_hashes,verified_at,verified_by,last_profile_id,evidence_state,revoked_at")
+    .eq("source_provider",PROVIDER).in("source_key",normalizedProfiles.map(profile=>profile.sourceKey))
+    .in("content_hash",normalizedProfiles.map(profile=>profile.contentHash))
+    : {data:[],error:null};
+  if(receiptRead.error)return NextResponse.json({error:"Adult receipt lookup unavailable; existing data preserved"},{status:503});
+  const receipts = new Map((receiptRead.data ?? []).map((row:AdultReceipt)=>[`${row.source_key}:${row.content_hash}`,row]));
+  const manualEvidence = new Map<string,AdultReceipt>();
+  const downloads = new Map<string,Awaited<ReturnType<typeof downloadImage>>>();
+  for (const profile of normalizedProfiles) {
+    const receipt = receipts.get(`${profile.sourceKey}:${profile.contentHash}`);
+    const current = existingByKey.get(profile.sourceKey);
+    if (!receipt || receipt.revoked_at || profile.photoState !== "present" || !cityByName.has(profile.cityName)) continue;
+    // Unchanged existing approvals stay valid; unbound receipts cannot approve a recreated row.
+    if (current?.id === receipt.last_profile_id && current.source_content_hash === profile.contentHash
+      && hasProfilePhotos(current) && current.adult_review_status === "verified" && current.adult_verified_by === receipt.verified_by) {
+      manualEvidence.set(profile.sourceKey,receipt); continue;
+    }
+    if (receipt.evidence_state !== "bound") continue;
+    try {
+      const hashes=[];
+      for(const image of profile.images){
+        const downloaded=await downloadImage(image.url);
+        downloads.set(image.url,downloaded);
+        hashes.push(createHash("sha256").update(downloaded.bytes).digest("hex"));
+      }
+      if(receiptMatches(receipt,profile.sourceKey,profile.contentHash,hashes))manualEvidence.set(profile.sourceKey,receipt);
+    } catch {
+      return NextResponse.json({error:"Identity photo comparison unavailable; existing data preserved"},{status:503});
+    }
+  }
   const preview = normalizedProfiles.map((profile) => {
     const current = existingByKey.get(profile.sourceKey);
     const city = cityByName.get(profile.cityName);
-    const reviewStatus = profile.verifiedAdult
-      ? "verified"
-      : current?.adult_review_status === "verified" || current?.adult_review_status === "rejected"
-        ? current.adult_review_status
-        : "pending";
+    const reviewStatus = reviewDecision(profile.details.age,manualEvidence.has(profile.sourceKey),current?.adult_review_status === "rejected");
     const action = profile.photoState === "invalid"
       ? "invalid-photo-data"
       : profile.photoState === "empty"
@@ -378,18 +409,18 @@ export async function POST(request: Request) {
       }
       if (!city) { result.skipped += 1; continue; }
       const current = existingByKey.get(profile.sourceKey);
-      const reviewStatus = profile.verifiedAdult
-        ? "verified"
-        : current?.adult_review_status === "verified" || current?.adult_review_status === "rejected"
-          ? current.adult_review_status
-          : "pending";
+      const receipt = manualEvidence.get(profile.sourceKey);
+      const reviewStatus = reviewDecision(profile.details.age,!!receipt,current?.adult_review_status === "rejected");
+      const verifiedAt=reviewStatus === "verified" ? receipt?.verified_at || capturedAt : null;
+      const verifiedBy=reviewStatus === "verified" ? receipt?.verified_by || null : null;
       const targetStatus = reviewStatus === "verified" ? "published" : reviewStatus === "rejected" ? "archived" : "draft";
       if (current?.source_content_hash === profile.contentHash && hasProfilePhotos(current)) {
         const { error: refreshError } = await supabase.from("profiles").update({
           source_last_seen_at: capturedAt,
           status: targetStatus,
           adult_review_status: reviewStatus,
-          adult_verified_at: reviewStatus === "verified" ? current.adult_verified_at || capturedAt : null,
+          adult_verified_at: verifiedAt,
+          adult_verified_by: verifiedBy,
         }).eq("id", current.id);
         if (refreshError) throw refreshError;
         result.unchanged += 1;
@@ -411,7 +442,7 @@ export async function POST(request: Request) {
         style: "",
         interest: "",
         introduction: serializeProfileDetails(profile.details),
-        status: photoImportStagingStatus(current),
+        status: reviewStatus === "verified" && current?.source_content_hash === profile.contentHash ? photoImportStagingStatus(current) : "draft",
         sort_order: 99,
         seo_title: seoTitle,
         seo_description: seoDescription,
@@ -421,8 +452,8 @@ export async function POST(request: Request) {
         source_content_hash: null,
         source_last_seen_at: capturedAt,
         adult_review_status: reviewStatus,
-        adult_verified_at: reviewStatus === "verified" ? current?.adult_verified_at || capturedAt : null,
-        adult_verified_by: current?.adult_verified_by || null,
+        adult_verified_at: verifiedAt,
+        adult_verified_by: verifiedBy,
       };
       const save = current
         ? await supabase.from("profiles").update(payload).eq("id", current.id).select("id").single()
@@ -436,9 +467,14 @@ export async function POST(request: Request) {
       if (assignmentError) throw assignmentError;
       const { error: assignmentDeleteError } = await supabase.from("profile_cities").delete().eq("profile_id", profileId).neq("city_id", city.id);
       if (assignmentDeleteError) throw assignmentDeleteError;
-      const coverPath = await syncImages(profileId, profile.displayName, profile.images);
+      const coverPath = await syncImages(profileId, profile.displayName, profile.images,downloads);
       const { error: coverError } = await supabase.from("profiles").update({ card_image_path: coverPath, source_content_hash: profile.contentHash, status: targetStatus }).eq("id", profileId);
       if (coverError) throw coverError;
+      if(receipt && receipt.last_profile_id !== profileId){
+        const restored=await supabase.from("adult_verification_receipts").update({last_profile_id:profileId})
+          .eq("source_provider",PROVIDER).eq("source_key",profile.sourceKey).eq("content_hash",profile.contentHash).is("revoked_at",null);
+        if(restored.error)throw restored.error;
+      }
       if (current) result.updated += 1;
       else result.created += 1;
     } catch (error) {
