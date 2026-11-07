@@ -41,12 +41,23 @@ returns integer language plpgsql security invoker set search_path = pg_catalog, 
 declare n integer;
 begin
   insert into public.profile_media_gc(path)
-  select o.name from storage.objects o
-  where o.bucket_id='site-media' and o.name ~ '^gpt-copy/profiles/[A-Za-z0-9_./-]+$'
-    and o.name not like '%..%' and o.created_at < now()-interval '24 hours'
-    and not exists(select 1 from public.profile_media_gc g where g.path=o.name)
-    and not public.sexy00_media_referenced(o.name)
-  order by o.name limit 500 on conflict do nothing;
+  with directly_referenced as materialized (
+    select card_image_path as path from public.profiles where card_image_path is not null
+    union select storage_path from public.profile_images
+    union select storage_path from public.profile_source_images
+    union select cover_image_path from public.articles where cover_image_path is not null
+    union select storage_path from public.article_images
+    union select image_path from public.regions where image_path is not null
+  ), candidates as materialized (
+    select o.name from storage.objects o
+    where o.bucket_id='site-media' and o.name ~ '^gpt-copy/profiles/[A-Za-z0-9_./-]+$'
+      and o.name not like '%..%' and o.created_at < now()-interval '24 hours'
+      and not exists(select 1 from public.profile_media_gc g where g.path=o.name)
+      and not exists(select 1 from directly_referenced r where r.path=o.name)
+    order by o.name limit 500
+  )
+  select name from candidates where not public.sexy00_media_referenced(name)
+  on conflict do nothing;
   get diagnostics n=row_count;
   return n;
 end; $$;
