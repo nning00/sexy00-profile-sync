@@ -38,4 +38,14 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.jsonc
+      - name: Check cleanup safely
+        env:
+          PROFILE_SYNC_ENDPOINT: ${{ secrets.PROFILE_SYNC_ENDPOINT }}
+          PROFILE_SYNC_SECRET: ${{ secrets.PROFILE_SYNC_SECRET }}
+        run: node scripts/edc-profile-sync.mjs --cleanup-check
+      - name: Remove approved unused media
+        env:
+          PROFILE_SYNC_ENDPOINT: ${{ secrets.PROFILE_SYNC_ENDPOINT }}
+          PROFILE_SYNC_SECRET: ${{ secrets.PROFILE_SYNC_SECRET }}
+        run: node scripts/edc-profile-sync.mjs --cleanup-only
 

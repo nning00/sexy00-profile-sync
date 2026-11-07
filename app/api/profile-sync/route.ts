@@ -4,7 +4,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { serializeProfileDetails, type ProfileDetails } from "@/lib/profile-details";
 import { isOwnedMediaPath, scopedMediaPath } from "@/lib/site-instance";
-import { archiveSnapshot, prepareSnapshot, snapshotSummary, syncErrorMessage } from "@/lib/profile-sync-snapshot";
+import { prepareSnapshot, snapshotSummary, syncErrorMessage } from "@/lib/profile-sync-snapshot";
+import { assertCleanupTarget, collectUnusedProfileMedia, safeProfileMediaPath } from "@/lib/profile-media-gc";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -45,6 +46,10 @@ type SyncBody = {
   deferRevalidation?: boolean;
   finalizeSnapshot?: boolean;
   snapshotSourceKeys?: string[];
+  sourceTotal?: number;
+  sourcePages?: number;
+  cleanupOnly?: boolean;
+  queueOrphans?: boolean;
   profiles?: SourceProfile[];
 };
 
@@ -238,7 +243,11 @@ async function syncImages(profileId: string, displayName: string, images: Source
   if (removed.length) {
     const { error: removeTrackingError } = await supabase.from("profile_source_images").delete().eq("profile_id", profileId).in("source_url", removed.map((row) => row.source_url));
     if (removeTrackingError) throw removeTrackingError;
-    if (removedOwnedPaths.length) await supabase.storage.from("site-media").remove(removedOwnedPaths);
+    const queuePaths=[...new Set(removedOwnedPaths.filter(safeProfileMediaPath))];
+    if(queuePaths.length){
+      const queued=await supabase.from("profile_media_gc").upsert(queuePaths.map(path=>({path})),{onConflict:"path",ignoreDuplicates:true});
+      if(queued.error)throw queued.error;
+    }
   }
   return ordered[0]?.storage_path ?? null;
 }
@@ -257,6 +266,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid sync payload" }, { status: 400 });
   }
   const mode = body.mode === "commit" ? "commit" : "preview";
+  if(body.cleanupOnly){
+    if(body.profiles.length || body.finalizeSnapshot) return NextResponse.json({error:"Invalid cleanup payload"},{status:400});
+    try{return NextResponse.json({ok:true,...await collectUnusedProfileMedia(createAdminClient(),mode==="commit",body.queueOrphans===true)},{headers:{"Cache-Control":"no-store"}});}
+    catch(error){return NextResponse.json({error:syncErrorMessage(error),stage:"media-cleanup"},{status:500});}
+  }
   const capturedAt = body.capturedAt && !Number.isNaN(Date.parse(body.capturedAt)) ? body.capturedAt : new Date().toISOString();
   if (body.finalizeSnapshot && (body.profiles.length !== 0 || !body.capturedAt || Number.isNaN(Date.parse(body.capturedAt)))) {
     return NextResponse.json({ error: "Snapshot requires an explicit timestamp and no profile mutations" }, { status: 400 });
@@ -269,18 +283,18 @@ export async function POST(request: Request) {
       const plan = await prepareSnapshot(supabase, PROVIDER, uniqueSnapshotSourceKeys, capturedAt);
       const snapshot = snapshotSummary(plan);
       if (mode === "preview") return NextResponse.json({ ok: true, mode, snapshot, archived: 0 }, { headers: { "Cache-Control": "no-store" } });
-      const archived = await archiveSnapshot(supabase, PROVIDER, plan, capturedAt);
-      const { error } = await supabase.from("profile_sync_runs").insert({
-        provider: PROVIDER, mode: "snapshot", status: plan.status === "blocked" ? "blocked" : "success",
-        summary: { ...snapshot, archived }, completed_at: new Date().toISOString(),
-      });
-      if (error) throw new Error(`snapshot-history-write: ${syncErrorMessage(error)}`);
+      assertCleanupTarget();
+      if(body.sourceTotal!==uniqueSnapshotSourceKeys.length || body.sourcePages!==Math.ceil(uniqueSnapshotSourceKeys.length/100)) {
+        return NextResponse.json({error:"Source completeness proof is required"},{status:400});
+      }
+      const completed=await supabase.rpc("sexy00_complete_profile_snapshot",{p_keys:uniqueSnapshotSourceKeys,p_captured_at:capturedAt,p_source_total:body.sourceTotal,p_source_pages:body.sourcePages});
+      if(completed.error) throw new Error(`snapshot-maintenance: ${syncErrorMessage(completed.error)}`);
       // Completed imports still need to appear even when archival is blocked.
       revalidateTag("profiles", { expire: 0 });
       revalidateTag("regions", { expire: 0 });
       revalidatePath("/", "layout");
       revalidatePath("/sitemap.xml");
-      return NextResponse.json({ ok: true, mode, snapshot, archived }, { headers: { "Cache-Control": "no-store" } });
+      return NextResponse.json({ ok: true, mode, snapshot:completed.data, archived:completed.data?.archived??0 }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
       return NextResponse.json({ error: syncErrorMessage(error), stage: "snapshot-finalize" }, { status: 500, headers: { "Cache-Control": "no-store" } });
     }

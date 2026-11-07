@@ -124,16 +124,27 @@ async function collectProfiles(selectedCity, limit) {
   const latestByCity = new Map();
   let page = 1;
   let totalPages = 1;
+  let expectedTotal = null;
+  const seenIds=new Set();
+  let rawCount=0,invalidCount=0;
   do {
     const url = new URL(sourceApi);
     url.searchParams.set("per_page", "100");
     url.searchParams.set("page", String(page));
-    url.searchParams.set("orderby", "date");
-    url.searchParams.set("order", "desc");
+    url.searchParams.set("orderby", "id");
+    url.searchParams.set("order", "asc");
     const { data, headers } = await fetchJson(url);
-    totalPages = Number(headers.get("x-wp-totalpages") || totalPages);
+    const total=Number(headers.get("x-wp-total"));
+    totalPages=Number(headers.get("x-wp-totalpages"));
+    if(!Array.isArray(data)||!Number.isSafeInteger(total)||total<=0||totalPages!==Math.ceil(total/100))throw new Error("Invalid source pagination; cleanup disabled");
+    if(expectedTotal===null)expectedTotal=total;
+    if(total!==expectedTotal)throw new Error("Source catalogue changed during collection; cleanup disabled");
     for (const product of data) {
+      rawCount++;
+      if(seenIds.has(String(product.id)))throw new Error("Duplicate source ID across pages; cleanup disabled");
+      seenIds.add(String(product.id));
       const profile = normalizeProduct(product);
+      if(!profile)invalidCount++;
       if (!profile || (selectedCity && profile.cityName !== selectedCity)) continue;
       const list = latestByCity.get(profile.cityName) || [];
       if (!list.some((item) => item.sourceKey === profile.sourceKey)) {
@@ -147,6 +158,7 @@ async function collectProfiles(selectedCity, limit) {
     page += 1;
   } while (page <= totalPages);
   const profiles = [...latestByCity.values()].flat();
+  if(!selectedCity && !limit && (rawCount!==expectedTotal || invalidCount || profiles.length!==expectedTotal))throw new Error("Incomplete source catalogue; cleanup disabled");
   return limit > 0 ? profiles.slice(0, limit) : profiles;
 }
 
@@ -158,6 +170,7 @@ async function postPayload(payload) {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
     body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(120000),
   });
   const result = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
   if (!response.ok && response.status !== 207) throw new Error(`HTTP ${response.status}: ${JSON.stringify(result)}`);
@@ -175,6 +188,23 @@ function errorMessage(error) {
 loadLocalEnv();
 const commit = process.argv.includes("--commit");
 const snapshotCheck = process.argv.includes("--snapshot-check");
+const cleanupOnly=process.argv.includes("--cleanup-only");
+const cleanupCheck=process.argv.includes("--cleanup-check");
+async function drainMediaQueue(preview=false,maxBatches=12){
+  for(let batch=0;batch<maxBatches;batch++){
+    const r=await postPayload({mode:preview?"preview":"commit",profiles:[],cleanupOnly:true,queueOrphans:batch===0});
+    if(!r || r.ok!==true || r.maintenanceVersion!==1)throw new Error("Expected cleanup version is not deployed; no successful cleanup can be confirmed");
+    console.log(`圖片清理 ${batch+1}：${JSON.stringify(r)}`);
+    if(preview || !r.remainingDue)return;
+    await new Promise(resolve=>setTimeout(resolve,500));
+  }
+  console.warn("::warning::清理已達本輪上限；剩餘佇列會在下次安全重試。");
+}
+if(cleanupOnly || cleanupCheck){
+  if(!process.env.PROFILE_SYNC_ENDPOINT||!process.env.PROFILE_SYNC_SECRET)throw new Error("Cleanup requires configured endpoint and secret");
+  await drainMediaQueue(cleanupCheck,200);
+  process.exit(0);
+}
 if (commit && (!process.env.PROFILE_SYNC_ENDPOINT || !process.env.PROFILE_SYNC_SECRET)) throw new Error("Commit requires endpoint and secret; no sync was performed");
 const selectedCity = argValue("--city") || "";
 const limit = Math.max(Number(argValue("--limit") || "0"), 0);
@@ -193,7 +223,7 @@ console.log(`候選 ${profiles.length} 筆；可確認成年 ${syncableProfiles.
 if (snapshotCheck) {
   if (!process.env.PROFILE_SYNC_ENDPOINT || !process.env.PROFILE_SYNC_SECRET) throw new Error("Snapshot check requires endpoint and secret");
   if (selectedCity || limit) throw new Error("Snapshot check requires the complete source catalogue");
-  const response = await postPayload({ mode: "preview", capturedAt, profiles: [], finalizeSnapshot: true, snapshotSourceKeys: profiles.map((profile) => profile.sourceKey) });
+  const response = await postPayload({ mode: "preview", capturedAt, profiles: [], finalizeSnapshot: true, snapshotSourceKeys: profiles.map((profile) => profile.sourceKey),sourceTotal:profiles.length,sourcePages:Math.ceil(profiles.length/100) });
   console.log(`唯讀收尾檢查（未修改任何資料）：${JSON.stringify(response)}`);
 } else if (process.env.PROFILE_SYNC_ENDPOINT && process.env.PROFILE_SYNC_SECRET) {
   const chunks = [];
@@ -242,11 +272,12 @@ if (snapshotCheck) {
     await new Promise((resolve) => setTimeout(resolve, 350));
   }
   if (commit && !selectedCity && limit === 0 && totals.errors === 0) {
-    const finalization = await postPayload({ mode: "commit", capturedAt, profiles: [], finalizeSnapshot: true, snapshotSourceKeys: profiles.map((profile) => profile.sourceKey) });
+    const finalization = await postPayload({ mode: "commit", capturedAt, profiles: [], finalizeSnapshot: true, snapshotSourceKeys: profiles.map((profile) => profile.sourceKey),sourceTotal:profiles.length,sourcePages:Math.ceil(profiles.length/100) });
     console.log(`同步收尾：${JSON.stringify(finalization)}`);
     if (finalization?.snapshot?.status === "blocked") {
       console.warn("::warning::資料已同步，但來源筆數下降觸發保護，未封存既有資料。請檢查收尾摘要，不代表來源已全數匹配。");
     }
+    if(finalization?.snapshot?.status!=="blocked")await drainMediaQueue();
   }
   console.log(JSON.stringify(totals, null, 2));
   if (totals.errors) throw new Error(`同步完成但有 ${totals.errors} 筆錯誤；已保留既有資料並略過封存，下次排程會重試。`);
