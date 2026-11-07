@@ -8,6 +8,7 @@ create table public.adult_verification_receipts (
   verified_by uuid not null,
   last_profile_id uuid not null,
   evidence_state text not null check(evidence_state in ('legacy-unbound','bound','insufficient-evidence')),
+  evidence_version integer not null default 1 check(evidence_version in (1,2)),
   revoked_at timestamptz,
   primary key(source_provider,source_key,content_hash)
 );
@@ -21,10 +22,11 @@ select source_provider,source_key,source_content_hash,adult_verified_at,adult_ve
 from public.profiles where source_provider='edc-public-catalog' and adult_review_status='verified'
 and adult_verified_at is not null and adult_verified_by is not null and source_content_hash ~ '^[a-f0-9]{64}$';
 
-create or replace function public.sexy00_save_adult_receipt(p_profile_id uuid,p_expected_hash text,p_photos jsonb,p_reviewer uuid default null)
+create or replace function public.sexy00_save_adult_receipt(p_profile_id uuid,p_expected_hash text,p_photos jsonb,p_reviewer uuid,p_evidence_version integer)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare p public.profiles%rowtype; n integer; hashes text[]; can_bind boolean; at_time timestamptz; by_user uuid;
 begin
+  if p_evidence_version not in (1,2) then raise exception 'Invalid evidence version'; end if;
   -- Serialize against automatic deletion and against another approval of this row.
   perform pg_advisory_xact_lock(hashtext('sexy00-profile-cleanup'));
   select * into p from public.profiles where id=p_profile_id and source_provider='edc-public-catalog' for update;
@@ -43,25 +45,37 @@ begin
     at_time:=p.adult_verified_at; by_user:=p.adult_verified_by;
   end if;
   perform 1 from public.profile_source_images where profile_id=p.id for update;
+  perform 1 from public.profile_cities where profile_id=p.id for update;
   select count(*) into n from public.profile_source_images where profile_id=p.id;
   if jsonb_typeof(p_photos) is distinct from 'array' then raise exception 'Invalid photo evidence'; end if;
-  can_bind:=n between 1 and 3 and jsonb_array_length(p_photos)=n
+  can_bind:=p_evidence_version=2 and n between 1 and 3 and jsonb_array_length(p_photos)=n
     and not exists(select 1 from jsonb_array_elements(p_photos) j where coalesce(j->>'sha256','') !~ '^[a-f0-9]{64}$')
     and not exists(select 1 from public.profile_source_images i where i.profile_id=p.id and
       not exists(select 1 from jsonb_array_elements(p_photos) j where j->>'source_url'=i.source_url and j->>'storage_path'=i.storage_path))
-    and (p_reviewer is not null or not exists(select 1 from public.profile_source_images i where i.profile_id=p.id and i.created_at>at_time));
+    and (p_reviewer is not null or not exists(select 1 from public.profile_source_images i where i.profile_id=p.id and i.created_at>at_time))
+    and coalesce(p_photos->0->'profile_snapshot'=jsonb_build_object('source_key',p.source_key,'source_url',p.source_url,
+      'display_name',p.display_name,'introduction',p.introduction,'city_names',
+      (select coalesce(jsonb_agg(c.name order by c.name),'[]'::jsonb) from public.profile_cities pc join public.cities c on c.id=pc.city_id where pc.profile_id=p.id)),false);
   if p_reviewer is not null and not can_bind then raise exception 'Photo evidence changed during review'; end if;
   select coalesce(array_agg(j->>'sha256' order by j->>'sha256'),'{}') into hashes from jsonb_array_elements(p_photos) j;
-  insert into public.adult_verification_receipts(source_provider,source_key,content_hash,photo_hashes,verified_at,verified_by,last_profile_id,evidence_state)
-  values(p.source_provider,p.source_key,p_expected_hash,case when can_bind then hashes else '{}' end,at_time,by_user,p.id,case when can_bind then 'bound' else 'insufficient-evidence' end)
+  insert into public.adult_verification_receipts(source_provider,source_key,content_hash,photo_hashes,verified_at,verified_by,last_profile_id,evidence_state,evidence_version)
+  values(p.source_provider,p.source_key,p_expected_hash,case when can_bind then hashes else '{}' end,at_time,by_user,p.id,case when can_bind then 'bound' else 'insufficient-evidence' end,p_evidence_version)
   on conflict(source_provider,source_key,content_hash) do update set photo_hashes=excluded.photo_hashes,verified_at=excluded.verified_at,
-    verified_by=excluded.verified_by,last_profile_id=excluded.last_profile_id,evidence_state=excluded.evidence_state,
-    revoked_at=case when p_reviewer is not null then null else public.adult_verification_receipts.revoked_at end;
+    verified_by=excluded.verified_by,last_profile_id=excluded.last_profile_id,evidence_state=excluded.evidence_state,evidence_version=excluded.evidence_version,
+    revoked_at=case when p_reviewer is not null then null else public.adult_verification_receipts.revoked_at end
+    where public.adult_verification_receipts.evidence_version<=excluded.evidence_version;
   if p_reviewer is not null then
     update public.profiles set adult_review_status='verified',adult_verified_at=at_time,adult_verified_by=by_user,status='published' where id=p.id;
   end if;
   return jsonb_build_object('saved',true,'bound',can_bind);
 end $$;
+revoke all on function public.sexy00_save_adult_receipt(uuid,text,jsonb,uuid,integer) from public,anon,authenticated;
+grant execute on function public.sexy00_save_adult_receipt(uuid,text,jsonb,uuid,integer) to service_role;
+-- Keep in-flight older workers compatible without allowing v1 to overwrite v2.
+create or replace function public.sexy00_save_adult_receipt(p_profile_id uuid,p_expected_hash text,p_photos jsonb,p_reviewer uuid default null)
+returns jsonb language sql security invoker set search_path=pg_catalog,public as $$
+  select public.sexy00_save_adult_receipt(p_profile_id,p_expected_hash,p_photos,p_reviewer,1);
+$$;
 revoke all on function public.sexy00_save_adult_receipt(uuid,text,jsonb,uuid) from public,anon,authenticated;
 grant execute on function public.sexy00_save_adult_receipt(uuid,text,jsonb,uuid) to service_role;
 

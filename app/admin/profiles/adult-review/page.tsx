@@ -13,7 +13,7 @@ export default async function AdultReviewPage({ searchParams }: { searchParams: 
   const receiptDb=createAdminClient();
   const [receipts,boundReceipts]=await Promise.all([
     receiptDb.from("adult_verification_receipts").select("source_key",{count:"exact",head:true}),
-    receiptDb.from("adult_verification_receipts").select("source_key",{count:"exact",head:true}).eq("evidence_state","bound").is("revoked_at",null),
+    receiptDb.from("adult_verification_receipts").select("source_key",{count:"exact",head:true}).eq("evidence_state","bound").eq("evidence_version",2).is("revoked_at",null),
   ]);
   const { data: profiles, error: profileError } = await supabase
     .from("profiles")

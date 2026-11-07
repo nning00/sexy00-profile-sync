@@ -7,7 +7,7 @@ import { isOwnedMediaPath, scopedMediaPath } from "@/lib/site-instance";
 import { prepareSnapshot, snapshotSummary, syncErrorMessage } from "@/lib/profile-sync-snapshot";
 import { assertCleanupTarget, collectUnusedProfileMedia, safeProfileMediaPath } from "@/lib/profile-media-gc";
 import { sourcePhotoState, hasProfilePhotos, photoImportStagingStatus } from "@/lib/profile-photo-policy";
-import { continueExistingApproval, receiptMatches, reviewDecision, type AdultReceipt } from "@/lib/adult-receipt-policy";
+import { adultIdentityBinding, continueExistingApproval, receiptMatches, reviewDecision, type AdultReceipt } from "@/lib/adult-receipt-policy";
 import { backfillAdultReceipts } from "@/lib/adult-receipts";
 
 export const dynamic = "force-dynamic";
@@ -333,7 +333,7 @@ export async function POST(request: Request) {
   const cityByName = new Map((cities ?? []).map((city) => [city.name, city]));
   const existingByKey = new Map((existing ?? []).map((profile) => [profile.source_key, profile]));
   const receiptRead = normalizedProfiles.length ? await supabase.from("adult_verification_receipts")
-    .select("source_key,content_hash,photo_hashes,verified_at,verified_by,last_profile_id,evidence_state,revoked_at")
+    .select("source_key,content_hash,photo_hashes,verified_at,verified_by,last_profile_id,evidence_state,revoked_at,evidence_version")
     .eq("source_provider",PROVIDER).in("source_key",normalizedProfiles.map(profile=>profile.sourceKey))
     .in("content_hash",normalizedProfiles.map(profile=>profile.contentHash))
     : {data:[],error:null};
@@ -350,13 +350,14 @@ export async function POST(request: Request) {
       && hasProfilePhotos(current) && current.adult_review_status === "verified" && current.adult_verified_by === receipt.verified_by) {
       manualEvidence.set(profile.sourceKey,receipt); continue;
     }
-    if (receipt.evidence_state !== "bound") continue;
+    if (receipt.evidence_state !== "bound" || receipt.evidence_version !== 2) continue;
     try {
       const hashes=[];
+      const binding=adultIdentityBinding({...profile,cityNames:[profile.cityName]});
       for(const image of profile.images){
         const downloaded=await downloadImage(image.url);
         downloads.set(image.url,downloaded);
-        hashes.push(createHash("sha256").update(downloaded.bytes).digest("hex"));
+        hashes.push(createHash("sha256").update(binding).update("\0").update(downloaded.bytes).digest("hex"));
       }
       if(receiptMatches(receipt,profile.sourceKey,profile.contentHash,hashes))manualEvidence.set(profile.sourceKey,receipt);
     } catch {

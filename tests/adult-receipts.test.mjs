@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { continueExistingApproval, receiptMatches, reviewDecision, samePhotoHashes, sourceAge } from '../lib/adult-receipt-policy.ts';
+import { adultIdentityBinding, continueExistingApproval, receiptMatches, reviewDecision, samePhotoHashes, sourceAge } from '../lib/adult-receipt-policy.ts';
 const a='a'.repeat(64), b='b'.repeat(64);
-const receipt={source_key:'101',content_hash:a,photo_hashes:[a,b],verified_at:'2026-01-01',verified_by:'fixture',last_profile_id:'old-row',evidence_state:'bound',revoked_at:null};
+const receipt={source_key:'101',content_hash:a,photo_hashes:[a,b],verified_at:'2026-01-01',verified_by:'fixture',last_profile_id:'old-row',evidence_state:'bound',revoked_at:null,evidence_version:2};
 test('exact identity and photo files can reuse manual approval after row recreation',()=>assert.equal(receiptMatches(receipt,'101',a,[b,a]),true));
 test('same name with another source ID is never enough',()=>assert.equal(receiptMatches(receipt,'102',a,[a,b]),false));
 test('changed source URL, city, details or picture URLs change full-content hash',()=>assert.equal(receiptMatches(receipt,'101',b,[a,b]),false));
@@ -32,3 +32,11 @@ test('legacy state is not transferable to a recreated, changed, archived or phot
  assert.equal(continueExistingApproval(legacy,a,'',false),false);
  assert.equal(continueExistingApproval(legacy,a,'17',true),false);
 });
+test('the reviewed actual metadata remains bound even if a cached source hash was stale',()=>{
+ const base={sourceKey:'101',sourceUrl:'https://edc.com.tw/a',displayName:'Person A',cityNames:['City A'],details:{height:'160',age:''}};
+ assert.notEqual(adultIdentityBinding(base),adultIdentityBinding({...base,displayName:'Person B'}));
+ assert.notEqual(adultIdentityBinding(base),adultIdentityBinding({...base,cityNames:['City B']}));
+ assert.notEqual(adultIdentityBinding(base),adultIdentityBinding({...base,details:{height:'170',age:''}}));
+ assert.equal(adultIdentityBinding(base),adultIdentityBinding({...base,details:{age:'',height:'160'}}));
+});
+test('old file-only fingerprints cannot approve a recreated identity',()=>assert.equal(receiptMatches({...receipt,evidence_version:1},'101',a,[a,b]),false));

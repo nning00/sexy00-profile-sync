@@ -3,7 +3,13 @@ export type AdultReceipt = {
   source_key: string; content_hash: string; photo_hashes: string[];
   verified_at: string; verified_by: string; last_profile_id: string;
   evidence_state: string; revoked_at: string | null;
+  evidence_version: number;
 };
+
+export function adultIdentityBinding(input:{sourceKey:string;sourceUrl:string;displayName:string;cityNames:string[];details:Record<string,string>}){
+  return JSON.stringify(["sexy00-manual-v2",input.sourceKey,input.sourceUrl,input.displayName,
+    [...input.cityNames].sort(),Object.keys(input.details).sort().map(key=>[key,input.details[key]])]);
+}
 
 export function samePhotoHashes(expected: string[], actual: string[]) {
   return expected.length > 0 && expected.length === actual.length
@@ -12,7 +18,7 @@ export function samePhotoHashes(expected: string[], actual: string[]) {
 }
 
 export function receiptMatches(receipt: AdultReceipt | undefined, sourceKey: string, hash: string, photos: string[]) {
-  return !!receipt && !receipt.revoked_at && receipt.evidence_state === "bound"
+  return !!receipt && !receipt.revoked_at && receipt.evidence_state === "bound" && receipt.evidence_version === 2
     && receipt.source_key === sourceKey && receipt.content_hash === hash
     && samePhotoHashes(receipt.photo_hashes, photos);
 }
