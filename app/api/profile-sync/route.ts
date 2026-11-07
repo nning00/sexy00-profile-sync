@@ -7,7 +7,7 @@ import { isOwnedMediaPath, scopedMediaPath } from "@/lib/site-instance";
 import { prepareSnapshot, snapshotSummary, syncErrorMessage } from "@/lib/profile-sync-snapshot";
 import { assertCleanupTarget, collectUnusedProfileMedia, safeProfileMediaPath } from "@/lib/profile-media-gc";
 import { sourcePhotoState, hasProfilePhotos, photoImportStagingStatus } from "@/lib/profile-photo-policy";
-import { adultIdentityBinding, continueExistingApproval, receiptMatches, reviewDecision, type AdultReceipt } from "@/lib/adult-receipt-policy";
+import { adultIdentityBinding, continueExistingApproval, manualReceiptCanContinue, receiptMatches, reviewDecision, type AdultReceipt } from "@/lib/adult-receipt-policy";
 import { backfillAdultReceipts } from "@/lib/adult-receipts";
 
 export const dynamic = "force-dynamic";
@@ -346,8 +346,7 @@ export async function POST(request: Request) {
     const current = existingByKey.get(profile.sourceKey);
     if (!receipt || receipt.revoked_at || profile.photoState !== "present" || !cityByName.has(profile.cityName)) continue;
     // Unchanged existing approvals stay valid; unbound receipts cannot approve a recreated row.
-    if (current?.id === receipt.last_profile_id && current.source_content_hash === profile.contentHash
-      && hasProfilePhotos(current) && current.adult_review_status === "verified" && current.adult_verified_by === receipt.verified_by) {
+    if (manualReceiptCanContinue(receipt,current,profile.contentHash,hasProfilePhotos(current))) {
       manualEvidence.set(profile.sourceKey,receipt); continue;
     }
     if (receipt.evidence_state !== "bound" || receipt.evidence_version !== 2) continue;

@@ -23,6 +23,12 @@ export function receiptMatches(receipt: AdultReceipt | undefined, sourceKey: str
     && samePhotoHashes(receipt.photo_hashes, photos);
 }
 
+export function manualReceiptCanContinue(receipt:AdultReceipt,current:{id:string;source_content_hash:string|null;status:string;adult_review_status:string;adult_verified_by:string|null}|undefined,hash:string,hasPhotos:boolean){
+  return !receipt.revoked_at && !!current && current.status === "published" && hasPhotos
+    && current.id === receipt.last_profile_id && current.source_content_hash === hash && receipt.content_hash === hash
+    && current.adult_review_status === "verified" && current.adult_verified_by === receipt.verified_by;
+}
+
 export function sourceAge(value: string): number | null {
   // Ambiguous ranges, birthdays, and malformed values are not adult evidence.
   const match = value.trim().match(/^(\d{1,2})\s*(?:歲|岁|years?\s*old)?$/i);

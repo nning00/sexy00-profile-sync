@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { adultIdentityBinding, continueExistingApproval, receiptMatches, reviewDecision, samePhotoHashes, sourceAge } from '../lib/adult-receipt-policy.ts';
+import { adultIdentityBinding, continueExistingApproval, manualReceiptCanContinue, receiptMatches, reviewDecision, samePhotoHashes, sourceAge } from '../lib/adult-receipt-policy.ts';
 const a='a'.repeat(64), b='b'.repeat(64);
 const receipt={source_key:'101',content_hash:a,photo_hashes:[a,b],verified_at:'2026-01-01',verified_by:'fixture',last_profile_id:'old-row',evidence_state:'bound',revoked_at:null,evidence_version:2};
 test('exact identity and photo files can reuse manual approval after row recreation',()=>assert.equal(receiptMatches(receipt,'101',a,[b,a]),true));
@@ -40,3 +40,10 @@ test('the reviewed actual metadata remains bound even if a cached source hash wa
  assert.equal(adultIdentityBinding(base),adultIdentityBinding({...base,details:{age:'',height:'160'}}));
 });
 test('old file-only fingerprints cannot approve a recreated identity',()=>assert.equal(receiptMatches({...receipt,evidence_version:1},'101',a,[a,b]),false));
+test('archived and recreated manual records require fresh photo comparison, not a shortcut',()=>{
+ const current={id:'old-row',source_content_hash:a,status:'published',adult_review_status:'verified',adult_verified_by:'fixture'};
+ assert.equal(manualReceiptCanContinue(receipt,current,a,true),true);
+ assert.equal(manualReceiptCanContinue(receipt,{...current,status:'archived'},a,true),false);
+ assert.equal(manualReceiptCanContinue(receipt,{...current,id:'new-row'},a,true),false);
+ assert.equal(manualReceiptCanContinue(receipt,current,a,false),false);
+});
