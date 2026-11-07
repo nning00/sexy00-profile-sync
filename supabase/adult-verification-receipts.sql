@@ -1,4 +1,4 @@
--- sexy00.cc only. No FK to profiles: profile cleanup must not erase manual receipts.
+-- sexy00.cc only. Keep receipts during temporary archival; delete them with the profile on permanent removal.
 create table public.adult_verification_receipts (
   source_provider text not null check (source_provider='edc-public-catalog'),
   source_key text not null,
@@ -10,8 +10,10 @@ create table public.adult_verification_receipts (
   evidence_state text not null check(evidence_state in ('legacy-unbound','bound','insufficient-evidence')),
   evidence_version integer not null default 1 check(evidence_version in (1,2)),
   revoked_at timestamptz,
-  primary key(source_provider,source_key,content_hash)
+  primary key(source_provider,source_key,content_hash),
+  constraint adult_receipts_profile_fk foreign key(last_profile_id) references public.profiles(id) on delete cascade
 );
+create index adult_receipts_profile_idx on public.adult_verification_receipts(last_profile_id);
 alter table public.adult_verification_receipts enable row level security;
 revoke all on public.adult_verification_receipts from public,anon,authenticated;
 grant select,insert,update on public.adult_verification_receipts to service_role;

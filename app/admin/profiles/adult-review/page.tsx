@@ -30,7 +30,7 @@ export default async function AdultReviewPage({ searchParams }: { searchParams: 
     {verified && <div className="admin-success">已確認成年並發布 1 筆資料。</div>}
     {verified_all && <div className="admin-success">已一鍵確認成年並發布 {verified_all} 筆資料。</div>}
     {(error || profileError) && <div className="admin-error">{error || profileError?.message}</div>}
-    <div className="admin-review-notice"><strong>確認原則與獨立紀錄</strong><p>缺少身高、體重等資料不影響發布；只有成年身分需要先確認。請勿依外貌推測，也不要填入虛構年齡。</p><p>人工確認紀錄會獨立保留，不隨形象下架清理而刪除。重新匯入時，來源編號、完整資料及照片指紋均吻合才可沿用；同名、資料或照片變更，以及證據不完整時仍需重新確認。這不是證件驗證，也不會使用人臉辨識。</p><p>{receipts.error || boundReceipts.error ? "確認紀錄統計暫時無法讀取，請稍後重新整理。" : `已保留 ${receipts.count ?? 0} 筆人工確認紀錄，其中 ${boundReceipts.count ?? 0} 筆具備完整照片比對依據。`}</p></div>
+    <div className="admin-review-notice"><strong>成年確認與資料清理</strong><p>缺少身高、體重等資料不影響發布；只有成年身分需要先確認。請勿依外貌推測，也不要填入虛構年齡。</p><p>成年確認紀錄與形象資料連動：暫時下架或封存期間保留，永久刪除形象時一併清除，不另行永久留存。人物永久刪除後若重新匯入，會重新依來源年齡或人工確認判斷，不沿用已清除的確認紀錄。</p><p>封存期間重新出現的同一筆形象，只有來源、完整資料與照片指紋吻合才可沿用確認；同名、資料或照片變更，以及證據不足時仍需重新確認。這不是證件驗證，也不會使用人臉辨識。</p><p>{receipts.error || boundReceipts.error ? "確認紀錄統計暫時無法讀取，請稍後重新整理。" : `目前記錄 ${receipts.count ?? 0} 筆人工確認，其中 ${boundReceipts.count ?? 0} 筆具備完整照片比對依據；永久刪除對應形象時會一起清除。`}</p></div>
     {!!profiles?.length && <VerifyAllAdultProfiles profileIds={profiles.map((profile) => profile.id)} />}
     <section className="admin-review-grid">
       {(profiles ?? []).map((profile) => {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { adultIdentityBinding, continueExistingApproval, manualReceiptCanContinue, receiptMatches, reviewDecision, samePhotoHashes, sourceAge } from '../lib/adult-receipt-policy.ts';
 const a='a'.repeat(64), b='b'.repeat(64);
 const receipt={source_key:'101',content_hash:a,photo_hashes:[a,b],verified_at:'2026-01-01',verified_by:'fixture',last_profile_id:'old-row',evidence_state:'bound',revoked_at:null,evidence_version:2};
-test('exact identity and photo files can reuse manual approval after row recreation',()=>assert.equal(receiptMatches(receipt,'101',a,[b,a]),true));
+test('a retained profile with exact identity and photos can reuse its manual approval',()=>assert.equal(receiptMatches(receipt,'101',a,[b,a]),true));
 test('same name with another source ID is never enough',()=>assert.equal(receiptMatches(receipt,'102',a,[a,b]),false));
 test('changed source URL, city, details or picture URLs change full-content hash',()=>assert.equal(receiptMatches(receipt,'101',b,[a,b]),false));
 test('replaced bytes at the same photo URL require another review',()=>assert.equal(receiptMatches(receipt,'101',a,[a,a]),false));
@@ -46,4 +46,8 @@ test('archived and recreated manual records require fresh photo comparison, not 
  assert.equal(manualReceiptCanContinue(receipt,{...current,status:'archived'},a,true),false);
  assert.equal(manualReceiptCanContinue(receipt,{...current,id:'new-row'},a,true),false);
  assert.equal(manualReceiptCanContinue(receipt,current,a,false),false);
+});
+test('permanent profile removal leaves no receipt to approve a new import',()=>{
+ assert.equal(receiptMatches(undefined,'101',a,[a,b]),false);
+ assert.equal(reviewDecision('',false,false),'pending');
 });
