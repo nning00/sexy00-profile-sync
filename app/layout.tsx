@@ -4,7 +4,7 @@ import SiteFooter from "@/components/SiteFooter";
 import PageUtilities from "@/components/PageUtilities";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 import JsonLd from "@/components/JsonLd";
-import { getSiteSettings, mediaUrl } from "@/lib/cms";
+import { getPublicNavigation, getSiteSettings, mediaUrl } from "@/lib/cms";
 import { completeOpenGraph } from "@/lib/seo-metadata";
 import { absoluteUrl, siteUrl } from "@/lib/structured-data";
 import "./site.css";
@@ -57,7 +57,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const settings = await getSiteSettings();
+  // Every rendered layout already needs the footer navigation. Start it with
+  // settings instead of waiting for the footer to render after the layout.
+  const [settings] = await Promise.all([getSiteSettings(), getPublicNavigation()]);
   const logoUrl = absoluteUrl(mediaUrl(settings.brand.logo_image));
   const organizationId = `${siteUrl}/#organization`;
   const structuredData = {

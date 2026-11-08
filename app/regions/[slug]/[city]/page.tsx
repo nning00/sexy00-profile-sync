@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import BrandMark from "@/components/BrandMark";
 import Link from "next/link";
-import { unstable_cache } from "next/cache";
+import { publicCache } from "@/lib/public-cache";
 import { notFound } from "next/navigation";
 import AgeGate from "@/components/AgeGate";
 import RegionNav from "@/components/RegionNav";
 import MobileMenu from "@/components/MobileMenu";
 import { profileExamples } from "@/data/profiles";
-import { getContentSettings, getPublishedArticles, getPublishedProfilePageForCity, getSiteSettings, mediaUrl, profileCardPath } from "@/lib/cms";
+import { getContentSettings, getPublishedArticleCards, getPublishedProfilePageForCity, getSiteSettings, mediaUrl, profileCardPath } from "@/lib/cms";
 import { createPublicClient } from "@/lib/supabase/public";
 import { completeOpenGraph } from "@/lib/seo-metadata";
 import JsonLd from "@/components/JsonLd";
@@ -22,7 +22,7 @@ export const revalidate = 300;
 // response instead of making the Worker rebuild every page on every request.
 // Admin saves and profile syncs explicitly invalidate the related cache tags.
 
-const getLocation = unstable_cache(async (regionSlug: string, citySlug: string) => {
+const getLocation = publicCache(async (regionSlug: string, citySlug: string) => {
   const supabase = createPublicClient();
   const loadRegion = () => supabase
       .from("regions")
@@ -64,14 +64,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function CityPage({ params }: { params: Promise<{ slug: string; city: string }> }) {
   const { slug, city: citySlug } = await params;
-  const { region, city } = await getLocation(slug, citySlug);
-  if (!region || !city) notFound();
-  const [profilePage, content, settings, publishedArticles] = await Promise.all([
+  const [{ region, city }, profilePage, content, settings, allArticleCards] = await Promise.all([
+    getLocation(slug, citySlug),
     getPublishedProfilePageForCity(slug, citySlug, 0, 24),
     getContentSettings(),
     getSiteSettings(),
-    getPublishedArticles(4),
+    getPublishedArticleCards(),
   ]);
+  if (!region || !city) notFound();
+  const publishedArticles = allArticleCards.slice(0, 4);
   const displayedProfiles = profilePage.profiles.length ? profilePage.profiles : profileExamples;
   const profileTotal = profilePage.profiles.length ? profilePage.total : profileExamples.length;
   const profileCards: CityProfileCard[] = displayedProfiles.map((profile) => {

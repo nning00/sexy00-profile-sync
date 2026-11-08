@@ -1,7 +1,22 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-type Metrics = { started: number; calls: number; duplicateCalls: number; databaseMs: number; seen: Set<string> };
+type Metrics = { started: number; calls: number; duplicateCalls: number; databaseMs: number; seen: Set<string>; reads: Map<string, Promise<unknown>> };
 const requests = new AsyncLocalStorage<Metrics>();
+
+// Coalesce concurrent cold-cache reads within one public GET only. Unlike a
+// process-global memo, this cannot outlive the response or bypass save/sync
+// invalidation. Admin/actions run without this scope and always use their
+// existing read-after-write behavior.
+export function memoizePublicRead<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const metrics = requests.getStore();
+  if (!metrics) return load();
+  const existing = metrics.reads.get(key);
+  if (existing) return existing as Promise<T>;
+  const result = Promise.resolve().then(load);
+  metrics.reads.set(key, result);
+  void result.catch(() => { if (metrics.reads.get(key) === result) metrics.reads.delete(key); });
+  return result;
+}
 
 // Request-local diagnostics only. Never retain or emit query URLs, headers,
 // tokens, content, or user identity. No cross-request response cache.
@@ -19,7 +34,7 @@ export async function measurePublicFetch(input: RequestInfo | URL, init?: Reques
 }
 
 export async function withRequestPerformance(run: () => Promise<Response>): Promise<Response> {
-  const metrics: Metrics = { started: performance.now(), calls: 0, duplicateCalls: 0, databaseMs: 0, seen: new Set() };
+  const metrics: Metrics = { started: performance.now(), calls: 0, duplicateCalls: 0, databaseMs: 0, seen: new Set(), reads: new Map() };
   return requests.run(metrics, async () => {
     const response = await run();
     const headers = new Headers(response.headers);

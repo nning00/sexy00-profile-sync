@@ -1,4 +1,4 @@
-import { unstable_cache } from "next/cache";
+import { publicCache } from "@/lib/public-cache";
 import { createPublicClient } from "@/lib/supabase/public";
 import { normalizeImagePosition } from "@/lib/image-position";
 
@@ -86,9 +86,9 @@ async function getPublishedProfilePageForCityUncached(regionSlug: string, citySl
   const supabase = createPublicClient();
   const safeOffset = Math.max(0, Math.floor(offset));
   const safeLimit = Math.min(48, Math.max(1, Math.floor(limit)));
-  const { data: region } = await supabase.from("regions").select("id").eq("slug", regionSlug).eq("published", true).maybeSingle();
+  const region = (await getPublicRegions()).find((item) => item.slug === regionSlug);
   if (!region) return { profiles: [] as CmsProfile[], total: 0 };
-  const { data: city } = await supabase.from("cities").select("id").eq("region_id", region.id).eq("slug", citySlug).eq("published", true).maybeSingle();
+  const city = region.cities.find((item) => item.slug === citySlug && item.published);
   if (!city) return { profiles: [] as CmsProfile[], total: 0 };
   const { data, error, count } = await supabase.from("profile_cities")
     .select("profiles!inner(id,slug,display_name,style,interest,introduction,card_image_path,seo_title,seo_description,updated_at,sort_order,status)", { count: "exact" })
@@ -174,24 +174,18 @@ async function getPublishedArticleCardsUncached() {
 async function getPublicRegionsUncached() {
   const { data } = await createPublicClient()
     .from("regions")
-    .select("slug,name,sort_order,cities(slug,name,sort_order,published)")
+    .select("id,slug,name,sort_order,cities(id,slug,name,sort_order,published)")
     .eq("published", true)
     .order("sort_order");
   return data ?? [];
 }
 
 async function getPublicNavigationUncached() {
-  const supabase = createPublicClient();
-  const [regions, { data: articles }] = await Promise.all([
-    getPublicRegionsUncached(),
-    supabase
-      .from("articles")
-      .select("slug,title")
-      .eq("status", "published")
-      .order("sort_order")
-      .limit(12),
+  const [regions, articles] = await Promise.all([
+    getPublicRegions(),
+    getPublishedArticleCards(),
   ]);
-  return { regions, articles: articles ?? [] };
+  return { regions, articles: articles.slice(0, 12).map(({ slug, title }) => ({ slug, title })) };
 }
 
 async function getPublishedArticleUncached(slug: string) {
@@ -283,20 +277,20 @@ async function getPublicSettingsBundleUncached() {
 }
 
 const cacheOptions = { revalidate: 300 } as const;
-const getPublicSettingsBundle = unstable_cache(getPublicSettingsBundleUncached, ["public-settings-bundle"], { ...cacheOptions, tags: ["site-settings"] });
+const getPublicSettingsBundle = publicCache(getPublicSettingsBundleUncached, ["public-settings-bundle"], { ...cacheOptions, tags: ["site-settings"] });
 
-export const getPublishedProfiles = unstable_cache(getPublishedProfilesUncached, ["published-profiles"], { ...cacheOptions, tags: ["profiles"] });
-export const getPublishedProfilesForCity = unstable_cache(getPublishedProfilesForCityUncached, ["published-profiles-city"], { ...cacheOptions, tags: ["profiles", "regions"] });
-export const getPublishedProfilePageForCity = unstable_cache(getPublishedProfilePageForCityUncached, ["published-profile-page-city"], { ...cacheOptions, tags: ["profiles", "regions"] });
-export const getPublishedProfile = unstable_cache(getPublishedProfileUncached, ["published-profile"], { ...cacheOptions, tags: ["profiles"] });
-export const getPublishedProfileSeoDuplicateCount = unstable_cache(getPublishedProfileSeoDuplicateCountUncached, ["published-profile-seo-duplicate-count"], { ...cacheOptions, tags: ["profiles"] });
-export const getRelatedProfiles = unstable_cache(getRelatedProfilesUncached, ["related-profiles"], { ...cacheOptions, tags: ["profiles", "regions"] });
-export const getPublishedArticles = unstable_cache(getPublishedArticlesUncached, ["published-articles"], { ...cacheOptions, tags: ["articles"] });
-export const getPublishedArticleCards = unstable_cache(getPublishedArticleCardsUncached, ["published-article-cards"], { ...cacheOptions, tags: ["articles"] });
-export const getPublicRegions = unstable_cache(getPublicRegionsUncached, ["public-regions"], { ...cacheOptions, tags: ["regions"] });
-export const getPublicNavigation = unstable_cache(getPublicNavigationUncached, ["public-navigation"], { ...cacheOptions, tags: ["regions", "articles"] });
-export const getPublishedArticle = unstable_cache(getPublishedArticleUncached, ["published-article"], { ...cacheOptions, tags: ["articles"] });
-export const getArticleCategories = unstable_cache(getArticleCategoriesUncached, ["article-categories"], { ...cacheOptions, tags: ["articles", "article-categories"] });
+export const getPublishedProfiles = publicCache(getPublishedProfilesUncached, ["published-profiles"], { ...cacheOptions, tags: ["profiles"] });
+export const getPublishedProfilesForCity = publicCache(getPublishedProfilesForCityUncached, ["published-profiles-city"], { ...cacheOptions, tags: ["profiles", "regions"] });
+export const getPublishedProfilePageForCity = publicCache(getPublishedProfilePageForCityUncached, ["published-profile-page-city"], { ...cacheOptions, tags: ["profiles", "regions"] });
+export const getPublishedProfile = publicCache(getPublishedProfileUncached, ["published-profile"], { ...cacheOptions, tags: ["profiles"] });
+export const getPublishedProfileSeoDuplicateCount = publicCache(getPublishedProfileSeoDuplicateCountUncached, ["published-profile-seo-duplicate-count"], { ...cacheOptions, tags: ["profiles"] });
+export const getRelatedProfiles = publicCache(getRelatedProfilesUncached, ["related-profiles"], { ...cacheOptions, tags: ["profiles", "regions"] });
+export const getPublishedArticles = publicCache(getPublishedArticlesUncached, ["published-articles"], { ...cacheOptions, tags: ["articles"] });
+export const getPublishedArticleCards = publicCache(getPublishedArticleCardsUncached, ["published-article-cards"], { ...cacheOptions, tags: ["articles"] });
+export const getPublicRegions = publicCache(getPublicRegionsUncached, ["public-regions-v2"], { ...cacheOptions, tags: ["regions"] });
+export const getPublicNavigation = publicCache(getPublicNavigationUncached, ["public-navigation-v2"], { ...cacheOptions, tags: ["regions", "articles"] });
+export const getPublishedArticle = publicCache(getPublishedArticleUncached, ["published-article"], { ...cacheOptions, tags: ["articles"] });
+export const getArticleCategories = publicCache(getArticleCategoriesUncached, ["article-categories"], { ...cacheOptions, tags: ["articles", "article-categories"] });
 export async function getSiteSettings() {
   return (await getPublicSettingsBundle()).settings;
 }
