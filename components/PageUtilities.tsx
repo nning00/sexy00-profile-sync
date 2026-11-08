@@ -22,8 +22,8 @@ export default function PageUtilities() {
     return () => observer.disconnect();
   }, [pathname]);
   if (pathname === "/admin/login") return null;
-  const top = () => window.scrollTo({ top: 0, behavior: "smooth" });
+  const top = () => window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" });
   if (isAdmin) return <><span ref={sentinelRef} className="page-top-sentinel" aria-hidden="true" /><div className={`admin-page-tools${visible ? " is-visible" : ""}`}><button type="button" onClick={() => router.back()} aria-label="返回上一頁">← 返回</button><button type="button" onClick={top} aria-label="回到頁面最上方">↑ TOP</button></div></>;
-  return <><span ref={sentinelRef} className="page-top-sentinel" aria-hidden="true" /><button className={`front-top-button${visible ? " is-visible" : ""}`} type="button" onClick={top} aria-label="回到頁面最上方"><span>↑</span><strong>TOP</strong></button></>;
+  return <div className="front-top-row"><button className="front-top-button is-visible" type="button" onClick={top} aria-label="回到頁面最上方"><span aria-hidden="true">↑</span><strong>回到頂部</strong></button></div>;
 }
 

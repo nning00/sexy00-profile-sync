@@ -40,11 +40,6 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.jsonc
-      - name: Preserve existing manual adult receipts (no new approvals)
-        env:
-          PROFILE_SYNC_ENDPOINT: ${{ secrets.PROFILE_SYNC_ENDPOINT }}
-          PROFILE_SYNC_SECRET: ${{ secrets.PROFILE_SYNC_SECRET }}
-        run: node scripts/edc-profile-sync.mjs --adult-receipt-backfill
       - name: Check no-photo policy (read-only)
         env:
           PROFILE_SYNC_ENDPOINT: ${{ secrets.PROFILE_SYNC_ENDPOINT }}
@@ -55,9 +50,6 @@ jobs:
           PROFILE_SYNC_ENDPOINT: ${{ secrets.PROFILE_SYNC_ENDPOINT }}
           PROFILE_SYNC_SECRET: ${{ secrets.PROFILE_SYNC_SECRET }}
         run: node scripts/edc-profile-sync.mjs --cleanup-check
-      - name: Remove approved unused media
-        env:
-          PROFILE_SYNC_ENDPOINT: ${{ secrets.PROFILE_SYNC_ENDPOINT }}
-          PROFILE_SYNC_SECRET: ${{ secrets.PROFILE_SYNC_SECRET }}
-        run: node scripts/edc-profile-sync.mjs --cleanup-only
+      # UI deployments only run read-only checks. Data maintenance remains in
+      # the independent six-hour sync, never as a side effect of publishing CSS.
 

@@ -35,7 +35,7 @@ export default async function Home() {
   const quickRegionSource = navigation.regions.length ? navigation.regions : fallbackRegions;
   const quickRegions = quickRegionSource.slice(0, 4).map((region) => ({
     name: region.name,
-    href: region.cities[0] ? `/regions/${region.slug}/${region.cities[0].slug}` : `/regions/${region.slug}`,
+    href: `/regions/${encodeURIComponent(region.slug)}`,
   }));
   const heroDesktopSource = mediaUrl(settings.homepage.hero_image);
   const heroMobileSource = mediaUrl(settings.homepage.hero_image_mobile);

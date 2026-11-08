@@ -7,11 +7,7 @@ import JsonLd from "@/components/JsonLd";
 import { getSiteSettings, mediaUrl } from "@/lib/cms";
 import { completeOpenGraph } from "@/lib/seo-metadata";
 import { absoluteUrl, siteUrl } from "@/lib/structured-data";
-import "./globals.css";
-import "./sunrise.css";
-import "./pastel-finish.css";
-import "./compact-layout.css";
-import "./editorial-redesign.css";
+import "./site.css";
 
 const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID ?? "";
 const supabaseOrigin = process.env.NEXT_PUBLIC_SUPABASE_URL;
