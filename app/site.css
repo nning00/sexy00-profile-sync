@@ -3276,6 +3276,9 @@ html { scroll-padding-block-start: var(--ui-anchor-offset); }
   .footer-column a, .footer-city-directory a { min-height: var(--ui-touch-target); }
   .home-page .service-body > a, .home-page .intro-copy > a { min-height: var(--ui-touch-target); display: inline-flex; align-items: center; }
   .site-header .brand, .detail-header .brand { min-height: var(--ui-touch-target); }
+  /* Keep the floating fallback on pages without a header reservation link.
+     Where the header provides LINE, avoid covering compact-page content. */
+  body:has(.site-header .nav-cta, .detail-header .detail-line-cta) .floating-line { display: none; }
 }
 @media (max-width: 700px) {
   .home-page .service-card p { color: var(--ui-readable-muted); font-size: 14px; line-height: 1.65; }

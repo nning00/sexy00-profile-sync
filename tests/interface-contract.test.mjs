@@ -20,6 +20,7 @@ test("one canonical CSS entry preserves palette and readable controls", () => {
   assert.match(css, /scroll-padding-block-start: var\(--ui-anchor-offset\)/);
   assert.match(css, /\.front-top-row \.front-top-button \{ position: static/);
   assert.match(css, /--ui-readable-muted: #47616a/);
+  assert.match(css, /\.floating-line \{ display: none; \}/);
 });
 test("modal navigation includes focus isolation and restoration", () => {
   const source = read("components/MobileMenuClient.tsx");
