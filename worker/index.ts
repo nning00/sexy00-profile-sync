@@ -1,4 +1,5 @@
 import handler from "vinext/server/fetch-handler";
+import { withRequestPerformance } from "../lib/request-performance";
 
 const PUBLIC_HTML_CACHE_CONTROL = "public, max-age=0, s-maxage=300, stale-while-revalidate=600";
 const CANONICAL_HOST = "sexy00.cc";
@@ -32,7 +33,11 @@ const worker = {
       requestUrl.hostname = CANONICAL_HOST;
       return Response.redirect(requestUrl.toString(), 308);
     }
-    const response = await handler.fetch(request, env, ctx);
+    const timed = (request.method === "GET" || request.method === "HEAD") &&
+      (!requestUrl.pathname.startsWith("/admin") && !requestUrl.pathname.startsWith("/api") || requestUrl.pathname === "/api/health");
+    const response = timed
+      ? await withRequestPerformance(() => handler.fetch(request, env, ctx))
+      : await handler.fetch(request, env, ctx);
     return withPublicHeaders(response, request);
   },
 };

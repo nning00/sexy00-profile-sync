@@ -9,6 +9,7 @@ on:
       - "app/**"
       - "components/**"
       - "lib/**"
+      - "worker/**"
       - "public/**"
       - "package.json"
       - "pnpm-lock.yaml"

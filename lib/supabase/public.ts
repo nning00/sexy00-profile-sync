@@ -1,10 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
 import { supabaseSchema } from "@/lib/site-instance";
+import { measurePublicFetch } from "@/lib/request-performance";
 
 function buildPublicClient(url: string, publishableKey: string) {
   return createClient(url, publishableKey, {
     db: { schema: supabaseSchema },
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: { fetch: measurePublicFetch },
   });
 }
 
