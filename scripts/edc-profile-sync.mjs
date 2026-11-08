@@ -1,11 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { requireSourceImages } from "./profile-source-images.mjs";
+import { assertSyncTarget, fetchSourceJson } from "./profile-sync-http.mjs";
 
 const projectRoot = resolve(import.meta.dirname, "..");
 const localEnvPaths = [join(projectRoot, ".env.sync.local"), join(projectRoot, ".env.local")];
 const sourceApi = "https://edc.com.tw/wp-json/wc/store/v1/products";
-const providerUserAgent = "AuthorizedProfileSync/1.0";
 const knownCities = new Set([
   "台北", "新北", "基隆", "桃園", "新竹", "苗栗", "台中", "彰化", "南投", "雲林",
   "嘉義", "台南", "高雄", "屏東", "宜蘭", "花蓮", "台東", "澎湖", "金門",
@@ -116,9 +116,7 @@ function isVerifiedAdult(profile) {
 }
 
 async function fetchJson(url) {
-  const response = await fetch(url, { headers: { Accept: "application/json", "User-Agent": providerUserAgent } });
-  if (!response.ok) throw new Error(`來源 API ${response.status}: ${url}`);
-  return { data: await response.json(), headers: response.headers };
+  return fetchSourceJson(url);
 }
 
 async function collectProfiles(selectedCity, limit) {
@@ -167,10 +165,11 @@ async function postPayload(payload) {
   const endpoint = process.env.PROFILE_SYNC_ENDPOINT;
   const secret = process.env.PROFILE_SYNC_SECRET;
   if (!endpoint || !secret) return null;
-  const response = await fetch(endpoint, {
+  const response = await fetch(assertSyncTarget(endpoint), {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
     body: JSON.stringify(payload),
+    redirect: "error",
     signal: AbortSignal.timeout(120000),
   });
   const result = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
@@ -187,6 +186,7 @@ function errorMessage(error) {
 }
 
 loadLocalEnv();
+if (process.env.PROFILE_SYNC_ENDPOINT) assertSyncTarget(process.env.PROFILE_SYNC_ENDPOINT);
 const commit = process.argv.includes("--commit");
 const snapshotCheck = process.argv.includes("--snapshot-check");
 const cleanupOnly=process.argv.includes("--cleanup-only");
@@ -319,4 +319,5 @@ if (snapshotCheck) {
 } else {
   console.log("尚未設定 PROFILE_SYNC_ENDPOINT / PROFILE_SYNC_SECRET，因此只建立本機預覽，不會修改正式網站。 ");
 }
+
 

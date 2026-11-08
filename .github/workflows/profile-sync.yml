@@ -2,7 +2,8 @@ name: Sync public profiles to sexy00.cc
 
 on:
   schedule:
-    - cron: "30 4,10,16,22 * * *"
+    # Lightweight catch-up check; actual catalogue sync runs once per six-hour slot.
+    - cron: "47 * * * *"
   workflow_dispatch:
     inputs:
       snapshot_check:
@@ -12,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: sexy00-profile-sync
@@ -26,14 +28,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Synchronize profiles to sexy00.cc
+      - name: Check six-hour slot (no data writes)
+        id: cadence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/profile-sync-schedule.mjs
+      - name: Verify sync helper regression tests
+        if: steps.cadence.outputs.sync_required == 'true'
+        run: node --test tests/profile-sync-reliability.test.mjs
+      - name: Read-only source and receiver check
+        if: steps.cadence.outputs.sync_required == 'true' && inputs.snapshot_check == true
         env:
           PROFILE_SYNC_ENDPOINT: ${{ secrets.PROFILE_SYNC_ENDPOINT }}
           PROFILE_SYNC_SECRET: ${{ secrets.PROFILE_SYNC_SECRET }}
-          SNAPSHOT_CHECK: ${{ inputs.snapshot_check }}
-        run: |
-          if [ "$SNAPSHOT_CHECK" = "true" ]; then
-            node scripts/edc-profile-sync.mjs --snapshot-check
-          else
-            node scripts/edc-profile-sync.mjs --commit
-          fi
+        run: node scripts/edc-profile-sync.mjs --snapshot-check
+      - name: Commit profile catalogue (six-hour slot)
+        if: steps.cadence.outputs.sync_required == 'true' && inputs.snapshot_check != true
+        env:
+          PROFILE_SYNC_ENDPOINT: ${{ secrets.PROFILE_SYNC_ENDPOINT }}
+          PROFILE_SYNC_SECRET: ${{ secrets.PROFILE_SYNC_SECRET }}
+        run: node scripts/edc-profile-sync.mjs --commit
+
