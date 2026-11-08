@@ -97,7 +97,7 @@ export default async function RegionPage({ params }: { params: Promise<{ slug: s
       </div>
     </header>
     <RegionNav />
-    <section className="region-hero">
+    <section className="region-hero" id="main-content" tabIndex={-1}>
       <div className="region-hero-image"><Image src={image} alt={`${region.name}專區形象照`} fill priority unoptimized={image.startsWith("http")} sizes="(max-width: 800px) 100vw, 54vw" /></div>
       <div className="region-hero-copy">
         <p className="eyebrow">{region.english_name || "TAIWAN REGION"}</p>

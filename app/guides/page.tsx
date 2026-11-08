@@ -21,7 +21,7 @@ export default function GuidesPage() {
       { "@type": "ItemList", name: "預約與地區完整指南", numberOfItems: seoGuides.length, itemListElement: seoGuides.map((guide, index) => ({ "@type": "ListItem", position: index + 1, name: guide.title, url: absoluteUrl(`/guides/${guide.slug}`) })) },
     ],
   };
-  return <><SiteHeader /><main className="guide-index">
+  return <><SiteHeader /><main className="guide-index" id="main-content" tabIndex={-1}>
     <JsonLd data={listData} />
     <header><p className="eyebrow">PRACTICAL GUIDES</p><h1>預約與地區完整指南</h1><p>先理解流程、安全與地區差異，再進入城市或形象頁查詢；所有內容均以成年人、自願、隱私與合法為前提。</p></header>
     <div className="guide-index-grid">{seoGuides.map((guide, index) => <Link href={`/guides/${guide.slug}`} key={guide.slug}><span>{String(index + 1).padStart(2, "0")}</span><p>{guide.eyebrow}</p><h2>{guide.title}</h2><small>{guide.description}</small><strong>閱讀完整指南 →</strong></Link>)}</div>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import FloatingLine from "@/components/FloatingLine";
 import SiteFooter from "@/components/SiteFooter";
 import PageUtilities from "@/components/PageUtilities";
+import SkipToContent from "@/components/SkipToContent";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 import JsonLd from "@/components/JsonLd";
 import { getPublicNavigation, getSiteSettings, mediaUrl } from "@/lib/cms";
@@ -91,8 +92,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body>
         <JsonLd data={structuredData} />
         <GoogleAnalytics measurementId={gaMeasurementId} />
-        <a className="skip-link" href="#main-content">跳到主要內容</a>
-        <span className="main-content-anchor" id="main-content" tabIndex={-1} />
+        <SkipToContent />
         {children}
         <PageUtilities />
         <SiteFooter />

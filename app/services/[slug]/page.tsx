@@ -101,7 +101,7 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
         </div>
       </header>
       <RegionNav />
-      <section className="detail-hero">
+      <section className="detail-hero" id="main-content" tabIndex={-1}>
         <div className="detail-image"><Image src={serviceImage} alt={`${service.title}形象照`} fill priority unoptimized={serviceImage.startsWith("http")} sizes="(max-width: 800px) 100vw, 48vw" style={{ objectPosition: service.image_position }} /></div>
         <div className="detail-copy">
           <p className="eyebrow">SERVICE {service.number}</p><h1>{service.title}</h1><h2>{service.subtitle}</h2><p>{service.text}</p>

@@ -36,7 +36,7 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
       { "@type": "FAQPage", mainEntity: guide.faqs.map((faq) => ({ "@type": "Question", name: faq.question, acceptedAnswer: { "@type": "Answer", text: faq.answer } })) },
     ],
   };
-  return <><SiteHeader /><main className="guide-page"><JsonLd data={structuredData} /><article className="guide-shell">
+  return <><SiteHeader /><main className="guide-page" id="main-content" tabIndex={-1}><JsonLd data={structuredData} /><article className="guide-shell">
     <nav className="article-breadcrumbs" aria-label="麵包屑"><Link href="/">首頁</Link><span>/</span><Link href="/guides">完整指南</Link></nav>
     <p className="eyebrow">{guide.eyebrow}</p><h1>{guide.title}</h1><p className="guide-lead">{guide.description}</p>
     <div className="article-author"><strong>{settings.brand.name}內容編輯團隊</strong><span>依公開資訊、安全原則與實際網站流程整理</span></div>

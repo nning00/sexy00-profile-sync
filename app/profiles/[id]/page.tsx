@@ -15,6 +15,7 @@ import { completeOpenGraph } from "@/lib/seo-metadata";
 import JsonLd from "@/components/JsonLd";
 import { absoluteUrl, breadcrumbStructuredData, imageStructuredData } from "@/lib/structured-data";
 import { isIndexableProfile } from "@/lib/profile-indexing";
+import ProfileReturnLink from "@/components/ProfileReturnLink";
 
 export const revalidate = 300;
 export const dynamicParams = true;
@@ -115,15 +116,16 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
         <MobileMenu />
         <Link className="brand" href="/"><BrandMark /><span>{settings.brand.name}</span></Link>
         <div className="detail-header-actions">
-          <Link className="detail-back-link" href="/#gallery">返回形象列表</Link>
+          <ProfileReturnLink className="detail-back-link" />
           <a className="nav-cta detail-line-cta" href={settings.brand.line_url} target="_blank" rel="noopener noreferrer">{settings.navigation.line_cta}</a>
         </div>
       </header>
       <RegionNav />
-      <section className="profile-detail-hero">
+      <section className="profile-detail-hero" id="main-content" tabIndex={-1}>
         <ProfileGallery images={gallery} />
         <div className="profile-detail-copy">
           <div className="breadcrumbs"><Link href="/">首頁</Link><span>/</span><strong>{name}</strong></div>
+          <ProfileReturnLink className="profile-return-link" arrow />
           <p className="eyebrow">PROFILE</p>
           <h1>{name}</h1>
           <div className="profile-summary">

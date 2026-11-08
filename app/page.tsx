@@ -68,7 +68,7 @@ export default async function Home() {
 
       <section className="hero" id="top">
         <div className="hero-sun" aria-hidden="true" />
-        <div className="hero-copy">
+        <div className="hero-copy" id="main-content" tabIndex={-1}>
           <h1>{settings.homepage.hero_title}</h1>
           <p className="hero-text">{settings.homepage.hero_text}</p>
           <div className="hero-actions">

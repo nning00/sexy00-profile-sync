@@ -1424,8 +1424,8 @@ h2 { margin: 0; font-size: clamp(36px, 4vw, 58px); line-height: 1.4; letter-spac
 /* Final visual layer for the independent Pastel Garden GPT preview. */
 :root {
   --ink: #263f4b;
-  --muted: #55717a;
-  --rose: #b64f78;
+  --muted: #47616a;
+  --rose: #963b63;
   --deep-rose: #963b63;
   --blush: #f9dfe8;
   --pale: #f3fbf8;
@@ -2754,7 +2754,7 @@ body { color: var(--ink); background: var(--cream); }
 :root {
   --editorial-bg: #fffef8;
   --editorial-ink: #263f4b;
-  --editorial-muted: #55717a;
+  --editorial-muted: #47616a;
   --editorial-accent: #963b63;
   --editorial-mint: #dff2e8;
   --editorial-sky: #dff1fa;
@@ -2790,7 +2790,7 @@ p, li { text-wrap: pretty; }
   transition: transform 300ms var(--editorial-ease);
 }
 .skip-link:focus { transform: none; }
-.main-content-anchor { width: 1px; height: 1px; position: absolute; left: 0; top: 0; pointer-events: none; }
+[id="main-content"] { scroll-margin-block-start: 16px; }
 .page-top-sentinel { width: 1px; height: 160px; position: absolute; left: 0; top: 0; pointer-events: none; }
 
 :where(a, button, summary, input, textarea, select):focus-visible {
@@ -3126,6 +3126,10 @@ p, li { text-wrap: pretty; }
 .site-footer .footer-about > p, .site-footer .footer-column a, .site-footer .footer-city-directory a, .site-footer .footer-bottom { color: #c9dfdc; }
 .site-footer .footer-line { color: white; }
 .floating-line { border-radius: 8px; box-shadow: 0 12px 32px rgba(39,79,85,.18); }
+.floating-line strong { color: #153e2c; }
+.article-date, .article-meta, .article-notice { color: var(--editorial-muted); }
+.city-grid i { color: var(--editorial-accent); }
+.profile-return-link { display: none; }
 .front-top-button { border-radius: 12px; box-shadow: 0 12px 32px rgba(39,79,85,.12); }
 
 @media (max-width: 980px) {
@@ -3158,6 +3162,7 @@ p, li { text-wrap: pretty; }
   }
   .site-header .nav-cta { min-width: 96px; padding: 0 12px; font-size: 13px; }
   .detail-header-actions .detail-back-link { display: none; }
+  .profile-return-link { min-height: 44px; margin-bottom: 12px; display: inline-flex; align-items: center; color: var(--editorial-accent); text-decoration: underline; text-underline-offset: 4px; }
   .detail-header-actions .detail-line-cta { min-width: 96px; height: 44px; padding: 0 12px; display: inline-flex; font-size: 13px; }
 }
 
@@ -3282,6 +3287,12 @@ html { scroll-padding-block-start: var(--ui-anchor-offset); }
 }
 @media (max-width: 700px) {
   .home-page .service-card p { color: var(--ui-readable-muted); font-size: 14px; line-height: 1.65; }
+  .home-page .home-articles .article-center-card-image,
+  .home-page .home-articles .article-center-card:first-child .article-center-card-image { min-height: 0; aspect-ratio: 16 / 9; }
+  .home-page .home-articles .article-center-card-copy { padding: 16px; }
+  .home-page .home-articles .article-center-card h2 { font-size: 20px; line-height: 1.4; }
+  .home-page .home-articles .article-center-card p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; line-height: 1.65; }
+  .home-page .home-articles .article-center-card strong { padding-top: 12px; }
   .city-seo > div:last-child, .city-seo p, .profile-introduction { font-size: 16px; line-height: 1.75; }
   .city-page .profile-section .section-heading > p:last-child { font-size: 14px; }
   .article-shell h1 { font-size: clamp(28px, 8vw, 34px); line-height: 1.3; }

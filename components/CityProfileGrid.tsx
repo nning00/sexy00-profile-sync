@@ -40,7 +40,7 @@ export default function CityProfileGrid({ profiles: initialProfiles, total, regi
 
   return <>
     <div className="profile-grid">
-      {profiles.map((profile, index) => <Link className="profile-card" href={`/profiles/${profile.slug}`} key={profile.id}>
+      {profiles.map((profile, index) => <Link className="profile-card" href={`/profiles/${profile.slug}?from=${encodeURIComponent(`/regions/${regionSlug}/${citySlug}`)}`} key={profile.id}>
         <div className="profile-photo">
           <OptimizedMediaImage
             src={profile.image}

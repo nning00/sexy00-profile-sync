@@ -135,7 +135,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     ],
   };
 
-  return (<><SiteHeader /><main className="article-page">
+  return (<><SiteHeader /><main className="article-page" id="main-content" tabIndex={-1}>
       <JsonLd data={articleStructuredData} />
       <article className="article-shell">
         <div className="article-breadcrumbs"><Link href="/">首頁</Link><span>/</span><Link href="/articles">全部文章</Link>{categorySlug && <><span>/</span><Link href={`/articles/category/${categorySlug}`}>{categoryName}</Link></>}</div>

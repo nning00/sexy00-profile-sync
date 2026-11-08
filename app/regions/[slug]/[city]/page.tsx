@@ -149,7 +149,7 @@ export default async function CityPage({ params }: { params: Promise<{ slug: str
       </header>
       <RegionNav />
 
-      <section className="profile-section section">
+      <section className="profile-section section" id="main-content" tabIndex={-1}>
         <div className="section-heading">
           <div className="article-breadcrumbs"><Link href="/">首頁</Link><span>/</span><Link href={`/regions/${region.slug}`}>{region.name}</Link><span>/</span><strong>{city.name}</strong></div>
           <h1>{city.page_title || `${city.name}地區精選資訊`}</h1>
