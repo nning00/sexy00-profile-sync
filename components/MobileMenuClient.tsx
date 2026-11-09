@@ -15,13 +15,15 @@ export default function MobileMenuClient({ regions, articles, labels }: { region
   const dialogId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLElement>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
     const drawer = drawerRef.current;
     const trigger = triggerRef.current;
     const layer = drawer?.closest(".mobile-drawer-layer");
     if (!drawer || !layer) return;
+    // Start inside the dialog without focusing an editable field on touch devices.
+    const focusClose = () => (closeRef.current ?? drawer).focus({ preventScroll: true });
     const bodyOverflow = document.body.style.overflow;
     const htmlOverflow = document.documentElement.style.overflow;
     const background = [...document.body.children].filter((el): el is HTMLElement => el instanceof HTMLElement && el !== layer);
@@ -41,7 +43,7 @@ export default function MobileMenuClient({ regions, articles, labels }: { region
       }
     };
     const keepFocusInside = (event: FocusEvent) => {
-      if (event.target instanceof Node && !drawer.contains(event.target)) (focusables()[0] ?? drawer).focus({ preventScroll: true });
+      if (event.target instanceof Node && !drawer.contains(event.target)) focusClose();
     };
     const closeOnDesktop = () => { if (window.innerWidth > 860) setOpen(false); };
     document.body.style.overflow = "hidden";
@@ -49,7 +51,7 @@ export default function MobileMenuClient({ regions, articles, labels }: { region
     document.addEventListener("keydown", closeOnEscape);
     document.addEventListener("focusin", keepFocusInside);
     window.addEventListener("resize", closeOnDesktop, { passive: true });
-    searchRef.current?.focus({ preventScroll: true });
+    focusClose();
     return () => {
       document.body.style.overflow = bodyOverflow;
       document.documentElement.style.overflow = htmlOverflow;
@@ -63,7 +65,7 @@ export default function MobileMenuClient({ regions, articles, labels }: { region
   const filteredRegions = useMemo(() => regions.map((region) => ({ ...region, cities: region.cities.filter((city) => `${region.name}${city.name}`.toLowerCase().includes(query.trim().toLowerCase())) })).filter((region) => !query.trim() || region.cities.length), [regions, query]);
   const filteredArticles = articles.filter((article) => article.title.toLowerCase().includes(query.trim().toLowerCase()));
   const drawer = open && typeof document !== "undefined" ? createPortal(<div className="mobile-drawer-layer"><button className="mobile-drawer-backdrop" tabIndex={-1} type="button" onClick={() => setOpen(false)} aria-label="點擊背景關閉選單" /><aside ref={drawerRef} id={dialogId} tabIndex={-1} className="mobile-drawer" aria-label="手機導覽選單" role="dialog" aria-modal="true">
-      <div className="drawer-search"><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder={labels.search} aria-label={labels.search} /><span aria-hidden="true">⌕</span><button className="mobile-drawer-close" type="button" onClick={() => setOpen(false)} aria-label="關閉選單">×</button></div>
+      <div className="drawer-search"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={labels.search} aria-label={labels.search} /><span aria-hidden="true">⌕</span><button ref={closeRef} className="mobile-drawer-close" type="button" onClick={() => setOpen(false)} aria-label="關閉選單">×</button></div>
       <div className="drawer-tabs"><button className={tab === "regions" ? "active" : ""} aria-pressed={tab === "regions"} type="button" onClick={() => setTab("regions")}>{labels.regions}</button><button className={tab === "articles" ? "active" : ""} aria-pressed={tab === "articles"} type="button" onClick={() => setTab("articles")}>{labels.articles}</button></div>
       <div className="drawer-list">{tab === "regions" ? filteredRegions.map((region) => <section className="drawer-region-group" key={region.slug}><h2><Link href={regionDirectoryHref(region.slug)} aria-current={isCurrentPath(pathname, regionDirectoryHref(region.slug)) ? "page" : undefined} onClick={() => setOpen(false)}>{region.name}</Link></h2>{region.cities.map((city) => { const href = `/regions/${region.slug}/${city.slug}`; return <Link href={href} aria-current={isCurrentPath(pathname, href) ? "page" : undefined} onClick={() => setOpen(false)} key={`${region.slug}-${city.slug}`}><span aria-hidden="true">⌖</span>{city.name}{isCurrentPath(pathname, href) && <span aria-hidden="true"> ✓</span>}</Link>; })}</section>) : <><Link href="/articles" aria-current={isCurrentPath(pathname, "/articles") ? "page" : undefined} onClick={() => setOpen(false)}><span aria-hidden="true">✦</span><strong>瀏覽全部文章</strong></Link>{filteredArticles.map((article) => <Link href={`/articles/${article.slug}`} aria-current={isCurrentPath(pathname, `/articles/${article.slug}`) ? "page" : undefined} onClick={() => setOpen(false)} key={article.slug}><span aria-hidden="true">✦</span>{article.title}</Link>)}</>}
       {((tab === "regions" && filteredRegions.length === 0) || (tab === "articles" && filteredArticles.length === 0)) && <p>找不到符合的內容</p>}</div>

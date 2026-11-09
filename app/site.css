@@ -3202,9 +3202,9 @@ p, li { text-wrap: pretty; }
   .home-page .service-body { padding: 24px 16px 24px 8px; }
   .home-page .service-card h3 { font-size: 20px; }
   .home-page .service-card p { display: block; font-size: 14px; -webkit-line-clamp: initial; }
-  .home-page .promise { width: calc(100% - 32px); margin-top: 0; grid-template-columns: 1fr; border-radius: 16px; }
+  .home-page .promise { width: calc(100% - 32px); min-height: 0; margin-top: 0; padding-bottom: 0; grid-template-columns: 1fr; border-radius: 16px; }
   .home-page .promise-image { min-height: 360px; border-radius: 16px 16px 0 0; }
-  .home-page .promise-copy { min-height: 0; padding: 40px 24px 48px; }
+  .home-page .promise-copy { min-height: 0; padding: 40px 24px 24px; }
   .home-page .promise-copy h2 { font-size: 36px; }
   .home-page .home-articles { padding-top: 32px; padding-bottom: 32px; }
   .home-page .home-articles .article-center-card, .home-page .home-articles .article-center-card:nth-child(2), .home-page .home-articles .article-center-card:nth-child(3) { display: block; }

@@ -30,6 +30,13 @@ test("modal navigation includes focus isolation and restoration", () => {
   assert.match(source, /trigger.focus\(\{ preventScroll: true \}\)/);
   assert.match(source, /aria-controls=\{dialogId\}/);
 });
+test("opening the mobile drawer focuses a non-editable control", () => {
+  const source = read("components/MobileMenuClient.tsx");
+  assert.match(source, /<button ref=\{closeRef\} className="mobile-drawer-close"/);
+  assert.match(source, /const focusClose = \(\) => \(closeRef.current \?\? drawer\).focus/);
+  assert.match(source, /addEventListener\("resize", closeOnDesktop, \{ passive: true \}\);\s*focusClose\(\);/);
+  assert.doesNotMatch(source, /searchRef|autoFocus/);
+});
 test("desktop navigation and categories expose keyboard and location state", () => {
   const source = read("components/RegionNavClient.tsx");
   for (const key of ["ArrowUp", "ArrowDown", "Home", "End", "Tab", "Escape"]) assert.ok(source.includes(`"${key}"`));
