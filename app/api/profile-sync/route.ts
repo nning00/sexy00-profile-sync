@@ -7,7 +7,7 @@ import { isOwnedMediaPath, scopedMediaPath } from "@/lib/site-instance";
 import { prepareSnapshot, snapshotSummary, syncErrorMessage } from "@/lib/profile-sync-snapshot";
 import { assertCleanupTarget, collectUnusedProfileMedia, safeProfileMediaPath } from "@/lib/profile-media-gc";
 import { sourcePhotoState, hasProfilePhotos, photoImportStagingStatus } from "@/lib/profile-photo-policy";
-import { adultIdentityBinding, continueExistingApproval, manualReceiptCanContinue, receiptMatches, reviewDecision, type AdultReceipt } from "@/lib/adult-receipt-policy";
+import { adultIdentityBinding, continueExistingApproval, manualReceiptCanContinue, matchingManualEvidence, needsManualEvidenceRecheck, receiptMatches, reviewDecision, sourceAge, type AdultReceipt } from "@/lib/adult-receipt-policy";
 import { backfillAdultReceipts } from "@/lib/adult-receipts";
 
 export const dynamic = "force-dynamic";
@@ -314,7 +314,7 @@ export async function POST(request: Request) {
   const supabase = createAdminClient();
   let existingQuery = supabase
     .from("profiles")
-    .select("id,source_key,source_content_hash,status,slug,card_image_path,profile_images(id),adult_review_status,adult_verified_at,adult_verified_by")
+    .select("id,source_key,source_content_hash,status,slug,card_image_path,profile_images(id),adult_review_status,adult_verified_at,adult_verified_by,updated_at")
     .eq("source_provider", PROVIDER);
   // Normal sync requests contain only a few records. Querying every imported
   // profile for every batch was the main source of Worker CPU and database
@@ -339,26 +339,70 @@ export async function POST(request: Request) {
     : {data:[],error:null};
   if(receiptRead.error)return NextResponse.json({error:"Adult receipt lookup unavailable; existing data preserved"},{status:503});
   const receipts = new Map((receiptRead.data ?? []).map((row:AdultReceipt)=>[`${row.source_key}:${row.content_hash}`,row]));
+  const recheckIds = normalizedProfiles.flatMap((profile) => {
+    const current = existingByKey.get(profile.sourceKey);
+    const exact = receipts.get(`${profile.sourceKey}:${profile.contentHash}`);
+    return current && profile.photoState === "present" && cityByName.has(profile.cityName)
+      && needsManualEvidenceRecheck(current, profile.details.age, hasProfilePhotos(current))
+      && !(exact && manualReceiptCanContinue(exact, current, profile.contentHash, hasProfilePhotos(current)))
+      ? [current.id] : [];
+  });
+  const historical = new Map<string, AdultReceipt[]>();
+  if (recheckIds.length) {
+    const { data, error } = await supabase.from("adult_verification_receipts")
+      .select("source_key,content_hash,photo_hashes,verified_at,verified_by,last_profile_id,evidence_state,revoked_at,evidence_version")
+      .eq("source_provider", PROVIDER).eq("evidence_state", "bound").eq("evidence_version", 2)
+      .is("revoked_at", null).in("last_profile_id", recheckIds).order("verified_at", { ascending: false }).limit(1000);
+    if (error || (data?.length ?? 0) >= 1000) {
+      return NextResponse.json({ error:"Adult evidence lookup incomplete; existing data preserved" }, { status:503 });
+    }
+    for (const row of (data ?? []) as AdultReceipt[]) {
+      historical.set(row.last_profile_id, [...(historical.get(row.last_profile_id) ?? []), row]);
+    }
+  }
   const manualEvidence = new Map<string,AdultReceipt>();
+  const reusedHistoricalEvidence = new Set<string>();
   const downloads = new Map<string,Awaited<ReturnType<typeof downloadImage>>>();
   for (const profile of normalizedProfiles) {
     const receipt = receipts.get(`${profile.sourceKey}:${profile.contentHash}`);
     const current = existingByKey.get(profile.sourceKey);
-    if (!receipt || receipt.revoked_at || profile.photoState !== "present" || !cityByName.has(profile.cityName)) continue;
+    const age = sourceAge(profile.details.age);
+    if ((age !== null && age < 18) || current?.adult_review_status === "rejected"
+      || profile.photoState !== "present" || !cityByName.has(profile.cityName)) continue;
     // Unchanged existing approvals stay valid; unbound receipts cannot approve a recreated row.
-    if (manualReceiptCanContinue(receipt,current,profile.contentHash,hasProfilePhotos(current))) {
+    if (receipt && manualReceiptCanContinue(receipt,current,profile.contentHash,hasProfilePhotos(current))) {
       manualEvidence.set(profile.sourceKey,receipt); continue;
     }
-    if (receipt.evidence_state !== "bound" || receipt.evidence_version !== 2) continue;
+    const exact = receipt && !receipt.revoked_at && receipt.evidence_state === "bound" && receipt.evidence_version === 2 ? receipt : undefined;
+    const candidates = current ? historical.get(current.id) ?? [] : [];
+    if (!exact && !candidates.length) continue;
     try {
-      const hashes=[];
+      const hashes: string[] = [];
       const binding=adultIdentityBinding({...profile,cityNames:[profile.cityName]});
-      for(const image of profile.images){
-        const downloaded=await downloadImage(image.url);
-        downloads.set(image.url,downloaded);
-        hashes.push(createHash("sha256").update(binding).update("\0").update(downloaded.bytes).digest("hex"));
+      if (candidates.length && current?.source_content_hash === profile.contentHash) {
+        // The same already-published snapshot is not replaced in this branch.
+        // Verify its actual stored files; a matching remote file alone is not proof.
+        const { data, error } = await supabase.from("profile_source_images")
+          .select("source_url,storage_path").eq("profile_id", current.id);
+        if (error) throw error;
+        const paths = new Map((data ?? []).map((row) => [row.source_url, row.storage_path]));
+        if (paths.size !== profile.images.length || !profile.images.every((image) => safeProfileMediaPath(paths.get(image.url) ?? ""))) continue;
+        for (const image of profile.images) {
+          const stored = await supabase.storage.from("site-media").download(paths.get(image.url)!);
+          if (stored.error || !stored.data || !stored.data.size || stored.data.size > MAX_IMAGE_BYTES) throw new Error("Stored photo evidence unavailable");
+          hashes.push(createHash("sha256").update(binding).update("\0").update(new Uint8Array(await stored.data.arrayBuffer())).digest("hex"));
+        }
+      } else {
+        for (const image of profile.images) {
+          const downloaded = downloads.get(image.url) ?? await downloadImage(image.url);
+          downloads.set(image.url, downloaded);
+          hashes.push(createHash("sha256").update(binding).update("\0").update(downloaded.bytes).digest("hex"));
+        }
       }
-      if(receiptMatches(receipt,profile.sourceKey,profile.contentHash,hashes))manualEvidence.set(profile.sourceKey,receipt);
+      const exactMatch = exact && receiptMatches(exact, profile.sourceKey, profile.contentHash, hashes) ? exact : undefined;
+      const matched = exactMatch ?? matchingManualEvidence(candidates, current, profile.sourceKey, hashes);
+      if (matched && !exactMatch) reusedHistoricalEvidence.add(profile.sourceKey);
+      if (matched) manualEvidence.set(profile.sourceKey, matched);
     } catch {
       return NextResponse.json({error:"Identity photo comparison unavailable; existing data preserved"},{status:503});
     }
@@ -411,20 +455,27 @@ export async function POST(request: Request) {
       if (!city) { result.skipped += 1; continue; }
       const current = existingByKey.get(profile.sourceKey);
       const receipt = manualEvidence.get(profile.sourceKey);
+      const guardConcurrentEdit = reusedHistoricalEvidence.has(profile.sourceKey);
       const continued=continueExistingApproval(current,profile.contentHash,profile.details.age,hasProfilePhotos(current));
       const reviewStatus = reviewDecision(profile.details.age,!!receipt||continued,current?.adult_review_status === "rejected");
       const verifiedAt=reviewStatus === "verified" ? receipt?.verified_at || (continued ? current?.adult_verified_at : null) || capturedAt : null;
       const verifiedBy=reviewStatus === "verified" ? receipt?.verified_by || null : null;
       const targetStatus = reviewStatus === "verified" ? "published" : reviewStatus === "rejected" ? "archived" : "draft";
       if (current?.source_content_hash === profile.contentHash && hasProfilePhotos(current)) {
-        const { error: refreshError } = await supabase.from("profiles").update({
+        const refresh = supabase.from("profiles").update({
           source_last_seen_at: capturedAt,
           status: targetStatus,
           adult_review_status: reviewStatus,
           adult_verified_at: verifiedAt,
           adult_verified_by: verifiedBy,
         }).eq("id", current.id);
-        if (refreshError) throw refreshError;
+        if (guardConcurrentEdit) {
+          const { data, error } = await refresh.eq("updated_at", current.updated_at).select("id").maybeSingle();
+          if (error || !data) throw new Error("profile changed during evidence comparison; retry required");
+        } else {
+          const { error } = await refresh;
+          if (error) throw error;
+        }
         result.unchanged += 1;
         continue;
       }
@@ -457,9 +508,9 @@ export async function POST(request: Request) {
         adult_verified_at: verifiedAt,
         adult_verified_by: verifiedBy,
       };
-      const save = current
-        ? await supabase.from("profiles").update(payload).eq("id", current.id).select("id").single()
-        : await supabase.from("profiles").insert(payload).select("id").single();
+      const saveQuery = current ? supabase.from("profiles").update(payload).eq("id", current.id) : supabase.from("profiles").insert(payload);
+      if (guardConcurrentEdit && current) saveQuery.eq("updated_at", current.updated_at);
+      const save = await saveQuery.select("id,updated_at").single();
       if (save.error) throw save.error;
       const profileId = save.data.id;
       const { error: assignmentError } = await supabase.from("profile_cities").upsert(
@@ -470,8 +521,14 @@ export async function POST(request: Request) {
       const { error: assignmentDeleteError } = await supabase.from("profile_cities").delete().eq("profile_id", profileId).neq("city_id", city.id);
       if (assignmentDeleteError) throw assignmentDeleteError;
       const coverPath = await syncImages(profileId, profile.displayName, profile.images,downloads);
-      const { error: coverError } = await supabase.from("profiles").update({ card_image_path: coverPath, source_content_hash: profile.contentHash, status: targetStatus }).eq("id", profileId);
-      if (coverError) throw coverError;
+      const cover = supabase.from("profiles").update({ card_image_path: coverPath, source_content_hash: profile.contentHash, status: targetStatus }).eq("id", profileId);
+      if (guardConcurrentEdit) {
+        const { data, error } = await cover.eq("updated_at", save.data.updated_at).select("id").maybeSingle();
+        if (error || !data) throw new Error("profile changed during photo import; publication not restored");
+      } else {
+        const { error } = await cover;
+        if (error) throw error;
+      }
       if(receipt && receipt.last_profile_id !== profileId){
         const restored=await supabase.from("adult_verification_receipts").update({last_profile_id:profileId})
           .eq("source_provider",PROVIDER).eq("source_key",profile.sourceKey).eq("content_hash",profile.contentHash).is("revoked_at",null);

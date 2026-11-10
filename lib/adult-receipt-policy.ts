@@ -23,6 +23,34 @@ export function receiptMatches(receipt: AdultReceipt | undefined, sourceKey: str
     && samePhotoHashes(receipt.photo_hashes, photos);
 }
 
+type ExistingManualApproval = {
+  id: string; status: string; source_content_hash: string | null;
+  adult_review_status: string; adult_verified_at: string | null; adult_verified_by: string | null;
+};
+
+export function needsManualEvidenceRecheck(current: ExistingManualApproval | undefined, age: string, hasPhotos: boolean) {
+  return !!current && current.status === "published" && current.adult_review_status === "verified"
+    && !!current.source_content_hash
+    && !!current.adult_verified_at && !!current.adult_verified_by && hasPhotos
+    && sourceAge(age) === null;
+}
+
+// The full catalogue hash also covers presentation details such as alt text and
+// image order. For a still-published row, compare the original v2 evidence
+// (reviewed metadata + exact photo bytes) before treating a new hash as new evidence.
+export function manualEvidenceCandidate(receipt: AdultReceipt, current: ExistingManualApproval | undefined, sourceKey: string) {
+  return !!current && current.status === "published" && current.adult_review_status === "verified"
+    && !!current.adult_verified_at && !!current.adult_verified_by
+    && !receipt.revoked_at && receipt.evidence_state === "bound" && receipt.evidence_version === 2
+    && receipt.last_profile_id === current.id && receipt.verified_by === current.adult_verified_by
+    && receipt.source_key === sourceKey;
+}
+
+export function matchingManualEvidence(receipts: AdultReceipt[], current: ExistingManualApproval | undefined, sourceKey: string, photoHashes: string[]) {
+  return receipts.find((receipt) => manualEvidenceCandidate(receipt, current, sourceKey)
+    && samePhotoHashes(receipt.photo_hashes, photoHashes));
+}
+
 export function manualReceiptCanContinue(receipt:AdultReceipt,current:{id:string;source_content_hash:string|null;status:string;adult_review_status:string;adult_verified_by:string|null}|undefined,hash:string,hasPhotos:boolean){
   return !receipt.revoked_at && !!current && current.status === "published" && hasPhotos
     && current.id === receipt.last_profile_id && current.source_content_hash === hash && receipt.content_hash === hash
