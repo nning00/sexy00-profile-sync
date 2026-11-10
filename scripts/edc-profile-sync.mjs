@@ -222,20 +222,6 @@ if(process.argv.includes("--photo-policy-check")){
   const actions=response?.items?.map(item=>item.action);
   if(response?.photoPolicyVersion!==1 || JSON.stringify(actions)!==JSON.stringify(["skip-no-photos","invalid-photo-data","invalid-photo-data"]))throw new Error("Photo policy preview did not pass; no mutation was requested");
   console.log("No-photo policy preview passed: explicit empty photos skipped; missing/invalid photo data rejected; no writes requested.");
-  if (process.env.GITHUB_ACTIONS === "true" && process.env.GITHUB_EVENT_NAME === "push") {
-    const counts = {};
-    const matchingOrdinals = [];
-    const cohort = "ac8d516028cb43d2171a54d14ea1bd46f3ba6432fe69172270e952ea8f8f33e4";
-    for (let offset = 0; offset < 190; offset += 5) {
-      const result = await postPayload({ mode:"preview", profiles:[], adultReceiptIncidentOffset:offset });
-      if (result?.cohort !== cohort || result.offset !== offset || result.outcomes?.length !== 5
-        || result.outcomes.some(x=>!["state-changed","unbound","photo-count-changed","current-evidence-ineligible","exact-match","evidence-mismatch","original-unavailable"].includes(x))) {
-        throw new Error("Incomplete incident audit; no writes requested");
-      }
-      result.outcomes.forEach((x,i)=>{counts[x]=(counts[x]||0)+1; if(x==="exact-match")matchingOrdinals.push(offset+i);});
-    }
-    console.log(`Read-only incident audit: ${JSON.stringify({ counts, matchingOrdinals })}`);
-  }
   process.exit(0);
 }
 async function drainMediaQueue(preview=false,maxBatches=12){
