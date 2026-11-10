@@ -9,6 +9,7 @@ import { assertCleanupTarget, collectUnusedProfileMedia, safeProfileMediaPath } 
 import { sourcePhotoState, hasProfilePhotos, photoImportStagingStatus } from "@/lib/profile-photo-policy";
 import { adultIdentityBinding, continueExistingApproval, manualReceiptCanContinue, matchingManualEvidence, needsManualEvidenceRecheck, receiptMatches, reviewDecision, sourceAge, type AdultReceipt } from "@/lib/adult-receipt-policy";
 import { backfillAdultReceipts } from "@/lib/adult-receipts";
+import { auditAdultReceiptIncident } from "@/lib/adult-receipt-incident-audit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -54,6 +55,7 @@ type SyncBody = {
   cleanupOnly?: boolean;
   queueOrphans?: boolean;
   adultReceiptBackfill?: boolean;
+  adultReceiptIncidentOffset?: number;
   profiles?: SourceProfile[];
 };
 
@@ -267,6 +269,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid sync payload" }, { status: 400 });
   }
   const mode = body.mode === "commit" ? "commit" : "preview";
+  if (body.adultReceiptIncidentOffset !== undefined) {
+    if (body.mode !== "preview" || body.profiles.length || body.finalizeSnapshot || body.cleanupOnly || body.adultReceiptBackfill) {
+      return NextResponse.json({ error:"Invalid read-only audit payload" }, { status:400 });
+    }
+    try {
+      return NextResponse.json(await auditAdultReceiptIncident(createAdminClient(),body.adultReceiptIncidentOffset), { headers: { "Cache-Control":"no-store" } });
+    } catch {
+      return NextResponse.json({ error:"Adult receipt audit could not be completed" }, { status:503, headers: { "Cache-Control":"no-store" } });
+    }
+  }
   if (body.adultReceiptBackfill) {
     if (body.profiles.length || body.finalizeSnapshot || body.cleanupOnly) return NextResponse.json({error:"Invalid receipt payload"},{status:400});
     if (mode !== "commit") return NextResponse.json({ok:true, adultReceiptPolicyVersion:1}, {headers:{"Cache-Control":"no-store"}});
