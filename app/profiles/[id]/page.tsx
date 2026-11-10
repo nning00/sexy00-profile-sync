@@ -9,7 +9,7 @@ import ProfileGallery from "@/components/ProfileGallery";
 import RegionNav from "@/components/RegionNav";
 import { profileExamples } from "@/data/profiles";
 import { getContentSettings, getPublishedProfile, getPublishedProfileSeoDuplicateCount, getRelatedProfiles, getSiteSettings, mediaUrl, profileCardPath } from "@/lib/cms";
-import { parseProfileDetails, profileDetailKeys } from "@/lib/profile-details";
+import { hideProfileAgeText, parseProfileDetails, profileDetailKeys } from "@/lib/profile-details";
 import { toEnglishProfileSlug } from "@/lib/profile-slugs";
 import { completeOpenGraph } from "@/lib/seo-metadata";
 import JsonLd from "@/components/JsonLd";
@@ -36,8 +36,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (!profile) return {};
   const name = "display_name" in profile ? profile.display_name : profile.name;
   const image = "card_image_path" in profile ? mediaUrl(profileCardPath(profile)) : profile.image;
-  const storedTitle = ("seo_title" in profile && profile.seo_title) || `${name}｜成人形象介紹`;
-  const storedDescription = ("seo_description" in profile && profile.seo_description) || "形象資訊、照片介紹與聯絡前須知。";
+  const storedTitle = hideProfileAgeText(("seo_title" in profile && profile.seo_title) || "") || `${name}｜成人形象介紹`;
+  const storedDescription = hideProfileAgeText(("seo_description" in profile && profile.seo_description) || "") || "形象資訊、照片介紹與聯絡前須知。";
   const description = storedDescription.includes(name) ? storedDescription : `${name}：${storedDescription}`;
   const duplicateCount = "display_name" in profile && isIndexableProfile(profile)
     ? await getPublishedProfileSeoDuplicateCount(profile.seo_title ?? "", profile.seo_description ?? "")
@@ -129,7 +129,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
           <p className="eyebrow">PROFILE</p>
           <h1>{name}</h1>
           <div className="profile-summary">
-            {profileDetailKeys.map((key, index) => details[key] && <div className={index >= 6 ? "wide" : ""} key={key}><span>{detailLabels[key]}</span><strong>{details[key]}</strong></div>)}
+            {profileDetailKeys.map((key, index) => key !== "age" && details[key] && <div className={index >= 6 ? "wide" : ""} key={key}><span>{detailLabels[key]}</span><strong>{details[key]}</strong></div>)}
           </div>
           <a className="button primary" href={settings.brand.line_url} target="_blank" rel="noopener noreferrer">{content.labels.profile_contact_button}</a>
           <p className="profile-legal-note">{content.labels.profile_legal_notice}</p>

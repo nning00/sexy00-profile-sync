@@ -15,7 +15,7 @@ function withPublicHeaders(response: Response, request: Request) {
   const isPublicPage = !url.pathname.startsWith("/admin") && !url.pathname.startsWith("/api");
   const isHtml = headers.get("content-type")?.toLowerCase().includes("text/html");
   if ((request.method === "GET" || request.method === "HEAD") && isPublicPage && isHtml && !headers.has("set-cookie")) {
-    headers.set("Cache-Control", PUBLIC_HTML_CACHE_CONTROL);
+    headers.set("Cache-Control", response.status === 200 ? PUBLIC_HTML_CACHE_CONTROL : "no-store");
   }
 
   return new Response(response.body, {

@@ -908,6 +908,14 @@ h2 { margin: 0; font-size: clamp(36px, 4vw, 58px); line-height: 1.4; letter-spac
 .admin-review-all-button:hover { background: #8f4357; }
 .admin-review-all-button:disabled { opacity: .62; cursor: wait; }
 .admin-review-all-form small { color: var(--muted); line-height: 1.65; }
+.admin-review-ready { margin: 24px 0; padding: 18px; border: 1px solid var(--line); background: white; }
+.admin-review-ready .admin-review-all-form { margin: 14px 0; flex-wrap: wrap; }
+.admin-review-selection { padding: 0; list-style: none; }
+.admin-review-selection li, .admin-review-pagination { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 8px 0; }
+.admin-review-selection li { border-bottom: 1px solid var(--line); }
+.admin-review-selection label { display: flex; gap: 8px; align-items: center; }
+.admin-review-selection small, .admin-review-result a { overflow-wrap: anywhere; }
+.admin-review-result { margin-top: 14px; }
 .admin-review-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .admin-review-card { min-width: 0; overflow: hidden; display: grid; grid-template-columns: 190px minmax(0, 1fr); background: white; border: 1px solid var(--line); }
 .admin-review-image { min-height: 300px; position: relative; display: grid; place-items: center; color: var(--muted); background: var(--pale); }

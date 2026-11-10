@@ -24,3 +24,9 @@ export function parseProfileDetails(value: string | null | undefined, legacyStyl
 export function serializeProfileDetails(details: ProfileDetails) {
   return JSON.stringify(details);
 }
+
+// Hide display ages while retaining the private source/review evidence.
+export function hideProfileAgeText(value: string) {
+  return value.replace(/(?<!\d)\d{1,2}\s*(?:歲|岁|years?\s*old)[、，,]?/gi,"")
+    .replace(/([｜、，,・])\s*(?=[｜、，,・。]|$)/g,"").trim();
+}

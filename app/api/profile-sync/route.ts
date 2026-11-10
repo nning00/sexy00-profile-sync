@@ -7,7 +7,7 @@ import { isOwnedMediaPath, scopedMediaPath } from "@/lib/site-instance";
 import { prepareSnapshot, snapshotSummary, syncErrorMessage } from "@/lib/profile-sync-snapshot";
 import { assertCleanupTarget, collectUnusedProfileMedia, safeProfileMediaPath } from "@/lib/profile-media-gc";
 import { sourcePhotoState, hasProfilePhotos, photoImportStagingStatus } from "@/lib/profile-photo-policy";
-import { adultIdentityBinding, continueExistingApproval, manualReceiptCanContinue, matchingManualEvidence, needsManualEvidenceRecheck, receiptMatches, reviewDecision, sourceAge, type AdultReceipt } from "@/lib/adult-receipt-policy";
+import { adultIdentityBinding, continueExistingApproval, manualReceiptCanContinue, matchingManualEvidence, needsManualEvidenceRecheck, receiptMatches, syncAdultReview, sourceAge, type AdultReceipt } from "@/lib/adult-receipt-policy";
 import { backfillAdultReceipts } from "@/lib/adult-receipts";
 
 export const dynamic = "force-dynamic";
@@ -80,11 +80,6 @@ function publicDetail(value: unknown, max = 100) {
     .trim();
   if (!normalized || /^(?:\?|[-–—]+|n\/?a|null|undefined|unknown|未知|不詳|未填|\{[^}]+\})$/i.test(normalized)) return "";
   return normalized;
-}
-
-function ageLabel(value: unknown) {
-  const age = publicDetail(value, 30);
-  return age && /^\d{2}$/.test(age) ? `${age}歲` : age;
 }
 
 function heightLabel(value: unknown) {
@@ -314,7 +309,7 @@ export async function POST(request: Request) {
   const supabase = createAdminClient();
   let existingQuery = supabase
     .from("profiles")
-    .select("id,source_key,source_content_hash,status,slug,card_image_path,profile_images(id),adult_review_status,adult_verified_at,adult_verified_by,updated_at")
+    .select("id,source_key,source_content_hash,status,slug,card_image_path,profile_images(id),adult_review_status,adult_verified_at,adult_verified_by,adult_publish_hold,updated_at")
     .eq("source_provider", PROVIDER);
   // Normal sync requests contain only a few records. Querying every imported
   // profile for every batch was the main source of Worker CPU and database
@@ -411,7 +406,7 @@ export async function POST(request: Request) {
     const current = existingByKey.get(profile.sourceKey);
     const city = cityByName.get(profile.cityName);
     const continued=continueExistingApproval(current,profile.contentHash,profile.details.age,hasProfilePhotos(current));
-    const reviewStatus = reviewDecision(profile.details.age,manualEvidence.has(profile.sourceKey)||continued,current?.adult_review_status === "rejected");
+    const { reviewStatus } = syncAdultReview(profile.details.age,manualEvidence.has(profile.sourceKey)||continued,current?.adult_review_status === "rejected",current?.adult_publish_hold);
     const action = profile.photoState === "invalid"
       ? "invalid-photo-data"
       : profile.photoState === "empty"
@@ -455,12 +450,11 @@ export async function POST(request: Request) {
       if (!city) { result.skipped += 1; continue; }
       const current = existingByKey.get(profile.sourceKey);
       const receipt = manualEvidence.get(profile.sourceKey);
-      const guardConcurrentEdit = reusedHistoricalEvidence.has(profile.sourceKey);
+      const guardConcurrentEdit = reusedHistoricalEvidence.has(profile.sourceKey) || !!current?.adult_publish_hold || current?.adult_review_status === "pending";
       const continued=continueExistingApproval(current,profile.contentHash,profile.details.age,hasProfilePhotos(current));
-      const reviewStatus = reviewDecision(profile.details.age,!!receipt||continued,current?.adult_review_status === "rejected");
+      const { reviewStatus,targetStatus } = syncAdultReview(profile.details.age,!!receipt||continued,current?.adult_review_status === "rejected",current?.adult_publish_hold);
       const verifiedAt=reviewStatus === "verified" ? receipt?.verified_at || (continued ? current?.adult_verified_at : null) || capturedAt : null;
       const verifiedBy=reviewStatus === "verified" ? receipt?.verified_by || null : null;
-      const targetStatus = reviewStatus === "verified" ? "published" : reviewStatus === "rejected" ? "archived" : "draft";
       if (current?.source_content_hash === profile.contentHash && hasProfilePhotos(current)) {
         const refresh = supabase.from("profiles").update({
           source_last_seen_at: capturedAt,
@@ -486,7 +480,7 @@ export async function POST(request: Request) {
         cupLabel(profile.details.cup),
         publicDetail(profile.details.price, 60),
       ].filter(Boolean);
-      const descriptionTraits = [ageLabel(profile.details.age), heightLabel(profile.details.height), cupLabel(profile.details.cup), publicDetail(profile.details.price, 60)].filter(Boolean);
+      const descriptionTraits = [heightLabel(profile.details.height), cupLabel(profile.details.cup), publicDetail(profile.details.price, 60)].filter(Boolean);
       const seoTitle = `${profile.cityName}${serviceMethod}｜${profile.displayName}${titleTraits.length ? `｜${titleTraits.join("・")}` : ""}`;
       const seoDescription = `${profile.cityName}${serviceMethod}資訊｜${profile.displayName}${descriptionTraits.length ? `，${descriptionTraits.join("、")}` : ""}。查看公開照片、服務地區與聯絡前須知。`;
       const payload = {

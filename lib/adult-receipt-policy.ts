@@ -81,3 +81,10 @@ export function reviewDecision(age: string, retainedApproval: boolean, rejected:
   if (number !== null && number >= 18 || retainedApproval) return "verified";
   return "pending";
 }
+
+export function syncAdultReview(age: string, retainedApproval: boolean, rejected: boolean, publishHold = false) {
+  const decided = reviewDecision(age,retainedApproval,rejected);
+  const reviewStatus = publishHold && decided === "verified" && !retainedApproval ? "pending" : decided;
+  const targetStatus = reviewStatus === "rejected" ? "archived" : reviewStatus === "verified" && !publishHold ? "published" : "draft";
+  return { reviewStatus,targetStatus };
+}
