@@ -9,6 +9,8 @@ import { articleCategoryName } from "@/components/ArticleCards";
 import JsonLd from "@/components/JsonLd";
 import { completeOpenGraph } from "@/lib/seo-metadata";
 import { absoluteUrl, breadcrumbStructuredData, imageStructuredData, siteUrl } from "@/lib/structured-data";
+import { publicArticleCoverUrl } from "@/lib/article-cover";
+import { scopedMediaPath } from "@/lib/site-instance";
 
 type ContextualArticleLink = { href: string; label: string };
 
@@ -62,7 +64,9 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const [article, settings] = await Promise.all([findArticle(slug), getSiteSettings()]);
   if (!article) return {};
   const seoTitle = ("seo_title" in article && article.seo_title) || article.title;
-  const coverImage = "cover_image_path" in article && article.cover_image_path ? mediaUrl(article.cover_image_path) : undefined;
+  const coverPath = "cover_image_path" in article ? article.cover_image_path : undefined;
+  const coverImage = publicArticleCoverUrl(article.slug, coverPath, scopedMediaPath("articles/covers/"))
+    ?? (coverPath ? mediaUrl(coverPath) : undefined);
   return {
     title: seoTitle.includes(settings.brand.name) ? { absolute: seoTitle } : seoTitle,
     description: ("seo_description" in article && article.seo_description) || article.excerpt || "",
@@ -93,6 +97,8 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
   const paragraphs = "content" in article ? articleParagraphs(article.content) : [];
   const categorySlug = "article_categories" in article ? article.article_categories?.slug : undefined;
   const coverImage = "cover_image_path" in article ? article.cover_image_path : null;
+  const publicCover = publicArticleCoverUrl(article.slug, coverImage, scopedMediaPath("articles/covers/"));
+  const coverSrc = publicCover ?? (coverImage ? mediaUrl(coverImage) : undefined);
   const coverAlt = "cover_image_alt" in article ? article.cover_image_alt || article.title : article.title;
   const articleImages = "article_images" in article ? article.article_images ?? [] : [];
   const contextualLinks = contextualArticleLinks[article.slug] ?? [];
@@ -106,7 +112,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     .filter((city) => city.published)
     .map((city) => ({ name: city.name, href: `/regions/${region.slug}/${city.slug}` })))
     .slice(0, 10);
-  const imageData = coverImage ? imageStructuredData(mediaUrl(coverImage), coverAlt) : undefined;
+  const imageData = coverSrc ? imageStructuredData(coverSrc, coverAlt) : undefined;
   const breadcrumbItems = [
     { name: "首頁", path: "/" },
     { name: "全部文章", path: "/articles" },
@@ -144,7 +150,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
         <div className="article-meta"><span>發布日期：{date}</span>{updatedDate && updatedDate !== date && <span>最後更新：{updatedDate}</span>}</div>
         <p className="article-lead">{article.excerpt}</p>
         <div className="article-author"><strong>{settings.brand.name}內容編輯團隊</strong><span>依公開資訊、網站流程與安全原則整理；重大內容變更會更新日期。</span></div>
-        {coverImage && <figure className="article-cover"><Image src={mediaUrl(coverImage)} alt={coverAlt} fill sizes="(max-width: 560px) calc(100vw - 50px), 740px" priority /></figure>}
+        {coverSrc && <figure className="article-cover"><Image src={coverSrc} alt={coverAlt} fill unoptimized={Boolean(publicCover)} sizes="(max-width: 560px) calc(100vw - 50px), 740px" priority /></figure>}
         {"sections" in article
           ? article.sections.map(([heading, content]) => <section key={heading}><h2>{heading}</h2><p>{content}</p></section>)
           : paragraphs.map((paragraph, index) => <section key={`${index}-${paragraph.slice(0, 12)}`}>{isArticleSectionHeading(paragraph) ? <h2>{paragraph}</h2> : <p>{paragraph}</p>}</section>)}
