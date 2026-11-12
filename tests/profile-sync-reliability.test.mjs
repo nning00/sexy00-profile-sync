@@ -141,3 +141,84 @@ test("existing complete-source, error and cleanup protections remain in the runn
   assert.match(script, /mode: "preview", capturedAt, profiles: \[\], finalizeSnapshot: true/);
 });
 
+
+const interruptedBody = (code = "ECONNRESET") => new TypeError("terminated", { cause: Object.assign(new Error("read interrupted"), { code }) });
+const sourceResponse = (json) => ({ ok: true, status: 200, headers: new Headers({ "x-wp-total": "1" }), json });
+
+test("source body ECONNRESET retries and returns only a fresh complete response", async () => {
+  let calls = 0; const sleeps = [];
+  const r = await fetchSourceJson(source, { warn: () => {}, sleep: async ms => sleeps.push(ms), fetchImpl: async (url, init) => {
+    assert.equal(url.href, source); assert.equal(init.method, undefined); assert.equal(init.redirect, "error");
+    calls++;
+    return calls === 1 ? sourceResponse(async () => { throw interruptedBody(); }) : Response.json([{ id: 42 }]);
+  } });
+  assert.equal(calls, 2); assert.deepEqual(sleeps, [15000]); assert.deepEqual(r.data, [{ id: 42 }]);
+});
+
+test("persistent source body interruption exhausts the existing three-attempt budget", async () => {
+  let calls = 0; const sleeps = [];
+  await assert.rejects(fetchSourceJson(source, { warn: () => {}, sleep: async ms => sleeps.push(ms), fetchImpl: async () => {
+    calls++; return sourceResponse(async () => { throw interruptedBody(); });
+  } }), /body read failure after 3 attempts.*existing data preserved/);
+  assert.equal(calls, 3); assert.deepEqual(sleeps, [15000, 45000]);
+});
+
+test("body failures share the budget with existing 5xx retries", async () => {
+  let calls = 0; const sleeps = [];
+  const r = await fetchSourceJson(source, { warn: () => {}, sleep: async ms => sleeps.push(ms), fetchImpl: async () => {
+    calls++;
+    if (calls === 1) return new Response(null, { status: 503 });
+    if (calls === 2) return sourceResponse(async () => { throw interruptedBody(); });
+    return Response.json([{ id: 7 }]);
+  } });
+  assert.equal(calls, 3); assert.deepEqual(sleeps, [15000, 45000]); assert.deepEqual(r.data, [{ id: 7 }]);
+});
+
+test("known source body network and timeout errors may recover", async () => {
+  for (const error of [interruptedBody("ETIMEDOUT"), interruptedBody("UND_ERR_SOCKET"), interruptedBody("UND_ERR_BODY_TIMEOUT"),
+    new DOMException("timed out", "TimeoutError"), new DOMException("aborted", "AbortError")]) {
+    let calls = 0;
+    const r = await fetchSourceJson(source, { warn: () => {}, sleep: async () => {}, fetchImpl: async () => {
+      calls++; return calls === 1 ? sourceResponse(async () => { throw error; }) : Response.json([]);
+    } });
+    assert.equal(calls, 2); assert.deepEqual(r.data, []);
+  }
+});
+
+test("unknown body exceptions and malformed JSON are not retried", async () => {
+  for (const error of [new SyntaxError("incomplete JSON"), new TypeError("unexpected parser error"), interruptedBody("ERR_TLS_CERT_ALTNAME_INVALID")]) {
+    let calls = 0;
+    await assert.rejects(fetchSourceJson(source, { sleep: async () => assert.fail("must not sleep"), fetchImpl: async () => {
+      calls++; return sourceResponse(async () => { throw error; });
+    } }), e => e === error);
+    assert.equal(calls, 1);
+  }
+});
+
+test("SyntaxError remains non-retryable even if an attached code looks transient", async () => {
+  const error = Object.assign(new SyntaxError("bad JSON"), { code: "ECONNRESET" });
+  await assert.rejects(fetchSourceJson(source, { sleep: async () => assert.fail("must not sleep"),
+    fetchImpl: async () => sourceResponse(async () => { throw error; }) }), e => e === error);
+});
+
+test("rate limit after body interruption stops without another retry", async () => {
+  let calls = 0; const sleeps = [];
+  await assert.rejects(fetchSourceJson(source, { warn: () => {}, sleep: async ms => sleeps.push(ms), fetchImpl: async () => {
+    calls++; return calls === 1 ? sourceResponse(async () => { throw interruptedBody(); }) : new Response(null, { status: 429 });
+  } }), /Source API 429/);
+  assert.equal(calls, 2); assert.deepEqual(sleeps, [15000]);
+});
+
+test("partial streaming body is discarded before a complete retry", async () => {
+  let calls = 0;
+  const r = await fetchSourceJson(source, { warn: () => {}, sleep: async () => {}, fetchImpl: async () => {
+    calls++;
+    if (calls > 1) return Response.json([{ id: 2 }]);
+    let sent = false;
+    return new Response(new ReadableStream({ pull(controller) {
+      if (!sent) { sent = true; controller.enqueue(new TextEncoder().encode('[{"id":1')); }
+      else controller.error(interruptedBody());
+    } }));
+  } });
+  assert.equal(calls, 2); assert.deepEqual(r.data, [{ id: 2 }]);
+});

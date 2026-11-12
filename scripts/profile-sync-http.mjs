@@ -42,8 +42,20 @@ export async function fetchSourceJson(value, {
     }
     // In particular, never retry or bypass 401/403/429 or disable TLS validation.
     if (!response.ok) throw new Error(`Source API ${response.status}; collection aborted, existing data preserved`);
-    return { data: await response.json(), headers: response.headers };
+    try {
+      return { data: await response.json(), headers: response.headers };
+    } catch (error) {
+      // Retry only interrupted source reads, never malformed JSON or writes.
+      const code = error?.cause?.code || error?.code;
+      const interrupted = ["ECONNRESET", "ETIMEDOUT", "UND_ERR_SOCKET", "UND_ERR_BODY_TIMEOUT"].includes(code) ||
+        error?.name === "TimeoutError" || error?.name === "AbortError";
+      if (!interrupted || error instanceof SyntaxError) throw error;
+      if (attempt === delays.length) throw new Error("Source body read failure after 3 attempts; collection aborted, existing data preserved", { cause: error });
+      warn(`Source body read interrupted; retry ${attempt + 1}/2 after ${delays[attempt] / 1000}s`);
+      await sleep(delays[attempt]);
+    }
   }
   throw new Error("Source collection aborted");
 }
+
 
