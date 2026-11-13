@@ -36,3 +36,20 @@ jobs:
           set -euo pipefail
           node tests/profile-lifecycle72h-postgres.mjs > /tmp/lifecycle-fixture.sql
           psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d lifecycle_test -f /tmp/lifecycle-fixture.sql
+
+  worker-checks:
+    name: sexy00-lifecycle72h-worker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.4'
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: node --experimental-strip-types --test tests/*.test.mjs
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm build

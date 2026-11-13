@@ -1,3 +1,4 @@
+import { recordSourceSkip } from "@/lib/profile-sync-exclusions";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
@@ -440,14 +441,16 @@ export async function POST(request: Request) {
       if(profile.photoState === "invalid")throw new Error("invalid-photo-data; existing profile preserved");
       if(profile.photoState === "empty"){
         assertCleanupTarget();
-        const removed=await supabase.rpc("sexy00_remove_photoless_profile",{p_source_key:profile.sourceKey,p_captured_at:capturedAt});
-        if(removed.error)throw new Error(`no-photo-cleanup: ${syncErrorMessage(removed.error)}`);
-        if(!["removed","skipped-empty","retained-photos","retained-newer"].includes(removed.data?.action))throw new Error("Unexpected no-photo cleanup result");
-        result.removedNoPhotos+=removed.data?.removed??0;
+        await recordSourceSkip(supabase,profile.sourceKey,capturedAt,"explicit-empty-photos");
+        // Source presence is recorded; no row or media is permanently deleted.
         result.skipped+=1;
         continue;
       }
-      if (!city) { result.skipped += 1; continue; }
+      if (!city) {
+        await recordSourceSkip(supabase,profile.sourceKey,capturedAt,"unmapped-city");
+        result.skipped += 1;
+        continue;
+      }
       const current = existingByKey.get(profile.sourceKey);
       const receipt = manualEvidence.get(profile.sourceKey);
       const guardConcurrentEdit = reusedHistoricalEvidence.has(profile.sourceKey) || !!current?.adult_publish_hold || current?.adult_review_status === "pending";

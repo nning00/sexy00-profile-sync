@@ -53,6 +53,15 @@ do $b$ begin
  begin perform sexy00_complete_profile_snapshot(array['1'],now(),2,1); raise exception 'should reject'; exception when others then if sqlerrm='should reject' then raise; end if; end;
 end; $b$;
 select pg_temp.check((select count(*)=2 from profile_sync_runs),'invalid total does not advance snapshot');
+
+-- Exclusions require a successful same-capture receipt from the importer.
+insert into profile_sync_runs(provider,mode,status,summary,completed_at) values
+('edc-public-catalog','source-exclusion','success',jsonb_build_object('version',1,'sourceKey','999999','reason','unmapped-city','capture',to_char((now()-interval '15 minutes') at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),now());
+select pg_temp.check((sexy00_complete_profile_snapshot(array['1','999999'],now()-interval '15 minutes',2,1)->>'status')='ready','same-capture persisted exclusion accepted');
+select pg_temp.check((sexy00_complete_profile_snapshot(array['1','999999'],now()-interval '10 minutes',2,1)->>'reason')='snapshot-import-proof-missing','stale capture receipt rejected');
+insert into profile_sync_runs(provider,mode,status,summary,completed_at) values
+('edc-public-catalog','source-exclusion','success',jsonb_build_object('version',1,'sourceKey','888888','reason','age-unknown','capture',to_char((now()-interval '5 minutes') at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),now());
+select pg_temp.check((sexy00_complete_profile_snapshot(array['1','888888'],now()-interval '5 minutes',2,1)->>'reason')='snapshot-import-proof-missing','unknown exclusion reason rejected');
 update profiles set source_last_seen_at=now(),status='published' where source_key='2';
 select sexy00_complete_profile_snapshot(array['1','2'],now(),2,1);
 select pg_temp.check((select first_missing_at is null and missed_snapshots=0 from profile_sync_lifecycle where profile_id='ffffffff-0000-0000-0000-000000000002'),'return clears missing lifecycle');

@@ -45,18 +45,20 @@ begin
     return result;
   end if;
   -- A source key with no persisted import cannot count as successfully processed.
-  -- Explicit source exclusions need durable evidence before this guard may be relaxed.
+  -- Only same-capture durable importer receipts can account for explicit exclusions.
   if exists(select 1 from unnest(p_keys) k
     where not exists(select 1 from public.profiles p where p.source_provider='edc-public-catalog'
-      and p.source_key=k and p.source_last_seen_at>=p_captured_at)) then
+      and p.source_key=k and p.source_last_seen_at>=p_captured_at)
+      and not exists(select 1 from public.profile_sync_runs r
+        where r.provider='edc-public-catalog' and r.mode='source-exclusion' and r.status='success'
+          and r.summary->>'version'='1' and r.summary->>'sourceKey'=k
+          and r.summary->>'reason' in ('unmapped-city','explicit-empty-photos')
+          and r.summary->>'capture'=to_char(p_captured_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
+          and r.completed_at>=p_captured_at and r.completed_at<=now()+interval '5 minutes')) then
     result=jsonb_build_object('status','blocked','reason','snapshot-import-proof-missing','archived',0,'deleted',0);
     insert into public.profile_sync_runs(provider,mode,status,summary,completed_at) values('edc-public-catalog','snapshot','blocked',result,now());
     return result;
   end if;
-  -- Any matched item must have been successfully imported in this capture.
-  if exists(select 1 from public.profiles where source_provider='edc-public-catalog' and source_key=any(p_keys)
-    and (source_last_seen_at is null or source_last_seen_at<p_captured_at)) then raise exception 'Snapshot imports are incomplete'; end if;
-
   insert into public.profile_sync_lifecycle(profile_id)
     select id from public.profiles where source_provider='edc-public-catalog' and source_key=any(p_keys)
     on conflict(profile_id) do update set missed_snapshots=0,first_missing_at=null,archived_at=null,archived_by_cleanup=false;
