@@ -3,7 +3,7 @@ CREATE OR REPLACE FUNCTION public.sexy00_complete_profile_snapshot(p_keys text[]
  RETURNS jsonb
  LANGUAGE plpgsql
  SET search_path TO 'pg_catalog', 'public'
-AS $function$;
+AS $function$
 declare
   n integer; baseline integer; minimum_count integer; last_capture timestamptz;
   archived_count integer:=0; deleted_count integer:=0; purge_ids uuid[]; result jsonb; confirmation_count integer:=0; held_ids uuid[]; held_hash text; extra_ids uuid[]; extra_hash text; new_ids uuid[]; new_hash text;
