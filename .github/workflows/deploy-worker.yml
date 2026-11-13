@@ -1,56 +1,75 @@
-name: Deploy sexy00.cc Worker
-
+name: Controlled sexy00 release
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - "app/**"
-      - "components/**"
-      - "lib/**"
-      - "worker/**"
-      - "public/**"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "proxy.ts"
-      - "vinext.config.*"
-      - "wrangler.jsonc"
-      - ".github/workflows/deploy-worker.yml"
-
+    inputs:
+      expected_sha:
+        description: Exact approved main SHA
+        required: true
+        type: string
+      expected_previous_version:
+        description: Exact verified current 100 percent Cloudflare version
+        required: true
+        type: string
+      expected_previous_deployment:
+        description: Exact verified current Cloudflare deployment ID
+        required: true
+        type: string
 permissions:
   contents: read
-
+  actions: read
+concurrency:
+  group: sexy00-production-operations
+  cancel-in-progress: false
 jobs:
-  deploy:
+  identity:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    steps:
+      - name: Refuse wrong ref, stale input and rerun attempts
+        env:
+          EXPECTED: ${{ inputs.expected_sha }}
+        run: |
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_SHA" = "$EXPECTED"
+          test "$GITHUB_RUN_ATTEMPT" = 1
+  validate:
+    needs: identity
+    uses: ./.github/workflows/lifecycle72h-pr-ci.yml
+  release:
+    # Official same-version rollback verified in run 43374515895; sync stays disabled.
+    needs: [identity, validate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: '22'
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
-      - run: node --experimental-strip-types --test tests/*.test.mjs
-      - run: pnpm exec tsc --noEmit
       - run: pnpm build
-      - name: Deploy Worker
-        uses: cloudflare/wrangler-action@v3
+        env:
+          WRANGLER_SEND_METRICS: 'false'
+          NEXT_TELEMETRY_DISABLED: '1'
+      - name: Release or restore baseline on failure
+        run: node scripts/controlled-release.mjs --photo-policy-check --cleanup-check
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_PREVIOUS_VERSION: ${{ inputs.expected_previous_version }}
+          EXPECTED_PREVIOUS_DEPLOYMENT: ${{ inputs.expected_previous_deployment }}
+          CI: 'true'
+          GH_TOKEN: ${{ github.token }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PROFILE_SYNC_SECRET: ${{ secrets.PROFILE_SYNC_SECRET }}
+          WRANGLER_SEND_METRICS: 'false'
+      - uses: actions/upload-artifact@v4
+        if: always()
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.jsonc
-      - name: Check no-photo policy (read-only)
-        env:
-          PROFILE_SYNC_ENDPOINT: ${{ secrets.PROFILE_SYNC_ENDPOINT }}
-          PROFILE_SYNC_SECRET: ${{ secrets.PROFILE_SYNC_SECRET }}
-        run: node scripts/edc-profile-sync.mjs --photo-policy-check
-      - name: Check cleanup safely
-        env:
-          PROFILE_SYNC_ENDPOINT: ${{ secrets.PROFILE_SYNC_ENDPOINT }}
-          PROFILE_SYNC_SECRET: ${{ secrets.PROFILE_SYNC_SECRET }}
-        run: node scripts/edc-profile-sync.mjs --cleanup-check
-      # UI deployments only run read-only checks. Data maintenance remains in
-      # the independent six-hour sync, never as a side effect of publishing CSS.
+          name: release-evidence-${{ github.run_id }}
+          path: release-evidence/
+          if-no-files-found: warn
 

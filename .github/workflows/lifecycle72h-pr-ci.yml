@@ -1,0 +1,76 @@
+name: sexy00 lifecycle 72h no-deploy checks
+on:
+  workflow_call:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+permissions:
+  contents: read
+jobs:
+  lifecycle-postgres:
+    name: sexy00-lifecycle72h-postgres
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: isolated-test-only
+          POSTGRES_DB: lifecycle_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.4'
+      - name: Verify unchanged retry helper
+        run: node --test tests/profile-sync-reliability.test.mjs
+      - name: Generate synthetic fixtures and execute actual candidate plus rollback
+        env:
+          PGPASSWORD: isolated-test-only
+        run: |
+          set -euo pipefail
+          node tests/profile-lifecycle72h-postgres.mjs > /tmp/lifecycle-fixture.sql
+          psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d lifecycle_test -f /tmp/lifecycle-fixture.sql
+
+  worker-checks:
+    name: sexy00-lifecycle72h-worker
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.4'
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: node --experimental-strip-types --test tests/*.test.mjs
+      - run: pnpm exec tsc --noEmit
+      - run: pnpm build
+
+  deployment-baseline-read:
+    name: sexy00-deployment-baseline-read-only
+    if: github.repository == 'nning00/sexy00-profile-sync' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.4'
+      - name: Read existing sexy00 Worker deployment only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/read-deployment-baseline.mjs
