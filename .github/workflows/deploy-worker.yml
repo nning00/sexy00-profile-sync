@@ -2,6 +2,10 @@ name: sexy00 same-current-version verification HOLD
 on:
   workflow_dispatch:
     inputs:
+      approved_sha:
+        description: Exact independently reviewed branch commit
+        required: true
+        type: string
       approved_operation:
         description: Requires explicit owner approval for this exact one-time operation
         required: true
@@ -13,8 +17,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   same-version:
-    # INACTIVE: remove only after owner approval and independent review.
-    if: false
+    # User approved exactly one same-current-version test; dispatch still requires reviewed SHA.
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'nning00/sexy00-profile-sync' && github.ref == 'refs/heads/chore/same-version-verification-hold-20261113' && github.run_attempt == 1 && inputs.approved_operation == 'sexy00-same-current-version-once' && inputs.approved_sha == github.sha
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -28,5 +32,6 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPROVED_OPERATION: ${{ inputs.approved_operation }}
         run: node scripts/verify-same-current-version.mjs
