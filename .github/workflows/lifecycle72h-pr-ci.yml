@@ -53,3 +53,23 @@ jobs:
       - run: node --experimental-strip-types --test tests/*.test.mjs
       - run: pnpm exec tsc --noEmit
       - run: pnpm build
+
+  deployment-baseline-read:
+    name: sexy00-deployment-baseline-read-only
+    if: github.repository == 'nning00/sexy00-profile-sync' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.4'
+      - name: Read existing sexy00 Worker deployment only
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: node scripts/read-deployment-baseline.mjs
