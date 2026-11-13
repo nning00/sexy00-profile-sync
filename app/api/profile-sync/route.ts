@@ -14,6 +14,21 @@ import { backfillAdultReceipts } from "@/lib/adult-receipts";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+// Authenticated read-only release probe. Does not finalize or import records.
+export async function GET(request: Request) {
+  if (!isAuthorized(request)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    assertCleanupTarget();
+    const { error } = await createAdminClient().from("profile_sync_runs").select("id", { head: true }).limit(1);
+    if (error) throw error;
+    return NextResponse.json({ ok: true, lifecycle72hVersion: 1, databaseReachable: true,
+      target: { siteUrl: "https://sexy00.cc", supabaseUrl: "https://kkxsclcqdxoiqucunpur.supabase.co" }
+    }, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    return NextResponse.json({ error: "Release probe failed" }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
+}
+
 const PROVIDER = "edc-public-catalog";
 const SOURCE_ORIGIN = "https://edc.com.tw";
 const ALLOWED_IMAGE_HOSTS = new Set(["edc.com.tw", "www.edc.com.tw"]);
@@ -79,18 +94,18 @@ function publicDetail(value: unknown, max = 100) {
     .replace(/&#(?:45|8211|8212);?/gi, "-")
     .replace(/&(?:ndash|mdash);?/gi, "-")
     .trim();
-  if (!normalized || /^(?:\?|[-–—]+|n\/?a|null|undefined|unknown|未知|不詳|未填|\{[^}]+\})$/i.test(normalized)) return "";
+  if (!normalized || /^(?:\?|[-�V�X]+|n\/?a|null|undefined|unknown|����|����|����|\{[^}]+\})$/i.test(normalized)) return "";
   return normalized;
 }
 
 function heightLabel(value: unknown) {
   const height = publicDetail(value, 30);
-  return height && /^\d{3}$/.test(height) ? `${height}公分` : height;
+  return height && /^\d{3}$/.test(height) ? `${height}����` : height;
 }
 
 function cupLabel(value: unknown) {
   const cup = publicDetail(value, 30);
-  return cup && !/罩杯$/i.test(cup) ? `${cup}罩杯` : cup;
+  return cup && !/�n�M$/i.test(cup) ? `${cup}�n�M` : cup;
 }
 
 function validSourceUrl(value: string) {
@@ -203,7 +218,7 @@ async function syncImages(profileId: string, displayName: string, images: Source
       profile_id: profileId,
       source_url: image.url,
       storage_path: storagePath,
-      alt_text: image.alt || `${displayName}形象照片 ${index + 1}`,
+      alt_text: image.alt || `${displayName}�ζH�Ӥ� ${index + 1}`,
       sort_order: index + 1,
     });
     if (trackError) throw trackError;
@@ -216,7 +231,7 @@ async function syncImages(profileId: string, displayName: string, images: Source
   if (latestError) throw latestError;
   const ordered = images.flatMap((image, index) => {
     const row = latestTracked?.find((candidate) => candidate.source_url === image.url);
-    return row ? [{ ...row, alt_text: image.alt || `${displayName}形象照片 ${index + 1}`, sort_order: index + 1 }] : [];
+    return row ? [{ ...row, alt_text: image.alt || `${displayName}�ζH�Ӥ� ${index + 1}`, sort_order: index + 1 }] : [];
   });
 
   const { data: previousImageRows, error: previousImageRowsError } = previousStoragePaths.length
@@ -270,8 +285,9 @@ export async function POST(request: Request) {
     catch { return NextResponse.json({error:"Receipt preparation failed; no new approvals made"},{status:500}); }
   }
   if(body.cleanupOnly){
+    if(mode === "commit") return NextResponse.json({error:"Permanent media cleanup requires a separately approved batch",automaticMediaDeletion:false},{status:409});
     if(body.profiles.length || body.finalizeSnapshot) return NextResponse.json({error:"Invalid cleanup payload"},{status:400});
-    try{return NextResponse.json({ok:true,...await collectUnusedProfileMedia(createAdminClient(),mode==="commit",body.queueOrphans===true)},{headers:{"Cache-Control":"no-store"}});}
+    try{return NextResponse.json({ok:true,...await collectUnusedProfileMedia(createAdminClient(),false,false)},{headers:{"Cache-Control":"no-store"}});}
     catch(error){return NextResponse.json({error:syncErrorMessage(error),stage:"media-cleanup"},{status:500});}
   }
   const capturedAt = body.capturedAt && !Number.isNaN(Date.parse(body.capturedAt)) ? body.capturedAt : new Date().toISOString();
@@ -476,7 +492,7 @@ export async function POST(request: Request) {
         result.unchanged += 1;
         continue;
       }
-      const serviceMethod = publicDetail(profile.details.serviceMethod, 60) || "成人形象";
+      const serviceMethod = publicDetail(profile.details.serviceMethod, 60) || "���H�ζH";
       const titleTraits = [
         publicDetail(profile.details.serviceArea, 60),
         heightLabel(profile.details.height),
@@ -484,8 +500,8 @@ export async function POST(request: Request) {
         publicDetail(profile.details.price, 60),
       ].filter(Boolean);
       const descriptionTraits = [heightLabel(profile.details.height), cupLabel(profile.details.cup), publicDetail(profile.details.price, 60)].filter(Boolean);
-      const seoTitle = `${profile.cityName}${serviceMethod}｜${profile.displayName}${titleTraits.length ? `｜${titleTraits.join("・")}` : ""}`;
-      const seoDescription = `${profile.cityName}${serviceMethod}資訊｜${profile.displayName}${descriptionTraits.length ? `，${descriptionTraits.join("、")}` : ""}。查看公開照片、服務地區與聯絡前須知。`;
+      const seoTitle = `${profile.cityName}${serviceMethod}�U${profile.displayName}${titleTraits.length ? `�U${titleTraits.join("?")}` : ""}`;
+      const seoDescription = `${profile.cityName}${serviceMethod}��T�U${profile.displayName}${descriptionTraits.length ? `�A${descriptionTraits.join("�B")}` : ""}�C�d�ݤ��}�Ӥ��B�A�Ȧa�ϻP�p���e�����C`;
       const payload = {
         slug: current?.slug || `source-${profile.sourceKey}`,
         display_name: profile.displayName,

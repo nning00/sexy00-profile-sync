@@ -1,5 +1,6 @@
 name: sexy00 lifecycle 72h no-deploy checks
 on:
+  workflow_call:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 permissions:

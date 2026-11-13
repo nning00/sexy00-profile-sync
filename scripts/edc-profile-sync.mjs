@@ -7,8 +7,8 @@ const projectRoot = resolve(import.meta.dirname, "..");
 const localEnvPaths = [join(projectRoot, ".env.sync.local"), join(projectRoot, ".env.local")];
 const sourceApi = "https://edc.com.tw/wp-json/wc/store/v1/products";
 const knownCities = new Set([
-  "台北", "新北", "基隆", "桃園", "新竹", "苗栗", "台中", "彰化", "南投", "雲林",
-  "嘉義", "台南", "高雄", "屏東", "宜蘭", "花蓮", "台東", "澎湖", "金門",
+  "�x�_", "�s�_", "��", "���", "�s��", "�]��", "�x��", "����", "�n��", "���L",
+  "�Ÿq", "�x�n", "����", "�̪F", "�y��", "�Ὤ", "�x�F", "���", "����",
 ]);
 
 function loadLocalEnv() {
@@ -46,25 +46,25 @@ function decodeHtml(value = "") {
 
 function sourceValue(value = "") {
   const normalized = decodeHtml(String(value)).trim();
-  return /^(?:\?|[-–—]+|n\/?a|null|undefined|unknown|未知|不詳|未填|\{[^}]+\})$/i.test(normalized) ? "" : normalized;
+  return /^(?:\?|[-�V�X]+|n\/?a|null|undefined|unknown|����|����|����|\{[^}]+\})$/i.test(normalized) ? "" : normalized;
 }
 
 function field(text, label, nextLabels) {
-  const start = text.search(new RegExp(`${label}\\s*[：:]\\s*`, "i"));
+  const start = text.search(new RegExp(`${label}\\s*[�G:]\\s*`, "i"));
   if (start < 0) return "";
-  const remainder = text.slice(start).replace(new RegExp(`^${label}\\s*[：:]\\s*`, "i"), "");
+  const remainder = text.slice(start).replace(new RegExp(`^${label}\\s*[�G:]\\s*`, "i"), "");
   const stopPattern = nextLabels.map((item) => item.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-  const stop = stopPattern ? remainder.search(new RegExp(`\\s(?:${stopPattern})\\s*[：:]`, "i")) : -1;
+  const stop = stopPattern ? remainder.search(new RegExp(`\\s(?:${stopPattern})\\s*[�G:]`, "i")) : -1;
   return (stop >= 0 ? remainder.slice(0, stop) : remainder).trim();
 }
 
 function attribute(product, name) {
   const match = product.attributes?.find((item) => item.name === name);
-  return match?.terms?.map((term) => term.name).filter(Boolean).join("、") || "";
+  return match?.terms?.map((term) => term.name).filter(Boolean).join("�B") || "";
 }
 
 function cityName(product) {
-  const fromAttribute = attribute(product, "城市").split(/[、,]/)[0]?.trim();
+  const fromAttribute = attribute(product, "����").split(/[�B,]/)[0]?.trim();
   if (knownCities.has(fromAttribute)) return fromAttribute;
   return product.categories?.map((category) => category.name).find((name) => knownCities.has(name)) || "";
 }
@@ -75,34 +75,34 @@ function priceText(prices) {
   const min = prices.price_range?.min_amount || prices.price;
   const max = prices.price_range?.max_amount || prices.price;
   if (!min) return "";
-  return min === max ? `${prefix}${Number(min).toLocaleString("zh-TW")}` : `${prefix}${Number(min).toLocaleString("zh-TW")}–${Number(max).toLocaleString("zh-TW")}`;
+  return min === max ? `${prefix}${Number(min).toLocaleString("zh-TW")}` : `${prefix}${Number(min).toLocaleString("zh-TW")}�V${Number(max).toLocaleString("zh-TW")}`;
 }
 
 function normalizeProduct(product) {
   const city = cityName(product);
   const text = decodeHtml(product.description || "");
-  const age = sourceValue(field(text, "年齡", ["身高", "體重", "罩杯", "類型"]));
-  const serviceMethod = attribute(product, "服務方式") || field(text, "類型", ["地區", "模式", "可配合"]);
-  const displayName = decodeHtml(product.name || "").replace(/^.*?[-–—]\s*/, "").trim();
+  const age = sourceValue(field(text, "�~��", ["����", "�魫", "�n�M", "����"]));
+  const serviceMethod = attribute(product, "�A�Ȥ覡") || field(text, "����", ["�a��", "�Ҧ�", "�i�t�X"]);
+  const displayName = decodeHtml(product.name || "").replace(/^.*?[-�V�X]\s*/, "").trim();
   if (!product.id || !product.permalink || !displayName || !city) return null;
   return {
     sourceKey: String(product.id),
     sourceUrl: product.permalink,
     displayName,
     cityName: city,
-    nationality: sourceValue(attribute(product, "國籍") || field(text, "國家", ["年齡"])),
+    nationality: sourceValue(attribute(product, "���y") || field(text, "��a", ["�~��"])),
     age,
-    height: sourceValue(attribute(product, "身高") || field(text, "身高", ["體重", "罩杯"])),
-    weight: sourceValue(field(text, "體重", ["罩杯", "類型"])),
-    cup: sourceValue(attribute(product, "罩杯") || field(text, "罩杯", ["類型", "地區"])),
-    environment: sourceValue(field(text, "模式", ["可配合", "不接受"])),
+    height: sourceValue(attribute(product, "����") || field(text, "����", ["�魫", "�n�M"])),
+    weight: sourceValue(field(text, "�魫", ["�n�M", "����"])),
+    cup: sourceValue(attribute(product, "�n�M") || field(text, "�n�M", ["����", "�a��"])),
+    environment: sourceValue(field(text, "�Ҧ�", ["�i�t�X", "������"])),
     serviceMethod: sourceValue(serviceMethod),
     price: priceText(product.prices),
-    serviceArea: sourceValue(attribute(product, "服務地區") || field(text, "地區", ["模式", "可配合"])),
-    compatible: sourceValue(attribute(product, "服務內容") || field(text, "可配合", ["不接受", "加價購", "優惠方案"])),
-    notAccepted: sourceValue(field(text, "不接受", ["加價購", "優惠方案"])),
-    surcharge: sourceValue(field(text, "加價購", ["優惠方案"])),
-    promotion: sourceValue(field(text, "優惠方案", [])),
+    serviceArea: sourceValue(attribute(product, "�A�Ȧa��") || field(text, "�a��", ["�Ҧ�", "�i�t�X"])),
+    compatible: sourceValue(attribute(product, "�A�Ȥ��e") || field(text, "�i�t�X", ["������", "�[����", "�u�f���"])),
+    notAccepted: sourceValue(field(text, "������", ["�[����", "�u�f���"])),
+    surcharge: sourceValue(field(text, "�[����", ["�u�f���"])),
+    promotion: sourceValue(field(text, "�u�f���", [])),
     images: requireSourceImages(product.images).slice(0, 3).map((image) => ({
       url: image.thumbnail || image.src,
       alt: decodeHtml(image.alt || image.name || `${city}${serviceMethod} ${displayName}`),
@@ -152,7 +152,7 @@ async function collectProfiles(selectedCity, limit) {
       }
     }
     const collected = [...latestByCity.values()].flat().length;
-    console.log(`來源頁 ${page}/${totalPages}，已整理 ${collected} 筆`);
+    console.log(`�ӷ��� ${page}/${totalPages}�A�w��z ${collected} ��`);
     if (limit > 0 && collected >= limit) break;
     page += 1;
   } while (page <= totalPages);
@@ -225,14 +225,15 @@ if(process.argv.includes("--photo-policy-check")){
   process.exit(0);
 }
 async function drainMediaQueue(preview=false,maxBatches=12){
+  if(!preview)throw new Error("Permanent media cleanup requires a separately approved batch");
   for(let batch=0;batch<maxBatches;batch++){
     const r=await postPayload({mode:preview?"preview":"commit",profiles:[],cleanupOnly:true,queueOrphans:batch===0});
     if(!r || r.ok!==true || r.maintenanceVersion!==1)throw new Error("Expected cleanup version is not deployed; no successful cleanup can be confirmed");
-    console.log(`圖片清理 ${batch+1}：${JSON.stringify(r)}`);
+    console.log(`�Ϥ��M�z ${batch+1}�G${JSON.stringify(r)}`);
     if(preview || !r.remainingDue)return;
     await new Promise(resolve=>setTimeout(resolve,500));
   }
-  console.warn("::warning::清理已達本輪上限；剩餘佇列會在下次安全重試。");
+  console.warn("::warning::�M�z�w�F�����W���F�Ѿl��C�|�b�U���w�����աC");
 }
 if(cleanupOnly || cleanupCheck){
   if(!process.env.PROFILE_SYNC_ENDPOINT||!process.env.PROFILE_SYNC_SECRET)throw new Error("Cleanup requires configured endpoint and secret");
@@ -242,7 +243,7 @@ if(cleanupOnly || cleanupCheck){
 if (commit && (!process.env.PROFILE_SYNC_ENDPOINT || !process.env.PROFILE_SYNC_SECRET)) throw new Error("Commit requires endpoint and secret; no sync was performed");
 const selectedCity = argValue("--city") || "";
 const limit = Math.max(Number(argValue("--limit") || "0"), 0);
-if (selectedCity && !knownCities.has(selectedCity)) throw new Error(`不支援的城市：${selectedCity}`);
+if (selectedCity && !knownCities.has(selectedCity)) throw new Error(`���䴩�������G${selectedCity}`);
 
 const capturedAt = new Date().toISOString();
 const profiles = await collectProfiles(selectedCity, limit);
@@ -251,14 +252,14 @@ const pendingReviewProfiles = profiles.filter((profile) => !isVerifiedAdult(prof
 const outputPath = join(projectRoot, "outputs", `edc-sync-${capturedAt.replace(/[:.]/g, "-")}.json`);
 mkdirSync(dirname(outputPath), { recursive: true });
 writeFileSync(outputPath, JSON.stringify({ capturedAt, candidateCount: profiles.length, verifiedAdultCount: syncableProfiles.length, pendingAdultReviewCount: pendingReviewProfiles.length, profiles }, null, 2));
-console.log(`預覽資料：${outputPath}`);
-console.log(`候選 ${profiles.length} 筆；可確認成年 ${syncableProfiles.length} 筆；待後台確認成年 ${pendingReviewProfiles.length} 筆；${[...new Set(profiles.map((profile) => profile.cityName))].length} 個城市`);
+console.log(`�w����ơG${outputPath}`);
+console.log(`�Կ� ${profiles.length} ���F�i�T�{���~ ${syncableProfiles.length} ���F�ݫ�x�T�{���~ ${pendingReviewProfiles.length} ���F${[...new Set(profiles.map((profile) => profile.cityName))].length} �ӫ���`);
 
 if (snapshotCheck) {
   if (!process.env.PROFILE_SYNC_ENDPOINT || !process.env.PROFILE_SYNC_SECRET) throw new Error("Snapshot check requires endpoint and secret");
   if (selectedCity || limit) throw new Error("Snapshot check requires the complete source catalogue");
   const response = await postPayload({ mode: "preview", capturedAt, profiles: [], finalizeSnapshot: true, snapshotSourceKeys: profiles.map((profile) => profile.sourceKey),sourceTotal:profiles.length,sourcePages:Math.ceil(profiles.length/100) });
-  console.log(`唯讀收尾檢查（未修改任何資料）：${JSON.stringify(response)}`);
+  console.log(`��Ū�����ˬd�]���ק�����ơ^�G${JSON.stringify(response)}`);
 } else if (process.env.PROFILE_SYNC_ENDPOINT && process.env.PROFILE_SYNC_SECRET) {
   const chunks = [];
   // Keep each request small because a batch also downloads several remote images.
@@ -277,16 +278,16 @@ if (snapshotCheck) {
         const attemptErrors = response?.result?.errors || [];
         const blockingErrors = attemptErrors.filter((item) => item?.message !== "image-download-404");
         if (!blockingErrors.length) break;
-        console.error(`批次 ${index + 1}/${chunks.length} 第 ${attempt} 次嘗試失敗：${JSON.stringify(blockingErrors)}`);
+        console.error(`�妸 ${index + 1}/${chunks.length} �� ${attempt} �����ե��ѡG${JSON.stringify(blockingErrors)}`);
       } catch (error) {
         terminalHttpError = errorMessage(error);
-        console.error(`批次 ${index + 1}/${chunks.length} 第 ${attempt} 次 HTTP 嘗試失敗：${terminalHttpError}`);
+        console.error(`�妸 ${index + 1}/${chunks.length} �� ${attempt} �� HTTP ���ե��ѡG${terminalHttpError}`);
       }
       if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 5000));
     }
     if (!response) {
       totals.errors += chunk.length;
-      console.error(`批次 ${index + 1}/${chunks.length} 已略過並繼續後續資料：${terminalHttpError}`);
+      console.error(`�妸 ${index + 1}/${chunks.length} �w���L���~������ơG${terminalHttpError}`);
       await new Promise((resolve) => setTimeout(resolve, 1000));
       continue;
     }
@@ -297,27 +298,27 @@ if (snapshotCheck) {
     const blockingErrors = responseErrors.filter((item) => item?.message !== "image-download-404");
     totals.warnings += warningErrors.length;
     totals.errors += blockingErrors.length;
-    console.log(`批次 ${index + 1}/${chunks.length}：${JSON.stringify(response?.summary || response)}`);
+    console.log(`�妸 ${index + 1}/${chunks.length}�G${JSON.stringify(response?.summary || response)}`);
     if (warningErrors.length) {
-      console.warn(`批次警告（來源圖片不存在，已跳過）：${JSON.stringify(warningErrors)}`);
+      console.warn(`�妸ĵ�i�]�ӷ��Ϥ����s�b�A�w���L�^�G${JSON.stringify(warningErrors)}`);
     }
     if (blockingErrors.length) {
-      console.error(`批次錯誤：${JSON.stringify(blockingErrors)}`);
+      console.error(`�妸���~�G${JSON.stringify(blockingErrors)}`);
     }
     await new Promise((resolve) => setTimeout(resolve, 350));
   }
   if (commit && !selectedCity && limit === 0 && totals.errors === 0) {
     const finalization = await postPayload({ mode: "commit", capturedAt, profiles: [], finalizeSnapshot: true, snapshotSourceKeys: profiles.map((profile) => profile.sourceKey),sourceTotal:profiles.length,sourcePages:Math.ceil(profiles.length/100) });
-    console.log(`同步收尾：${JSON.stringify(finalization)}`);
+    console.log(`�P�B�����G${JSON.stringify(finalization)}`);
     if (finalization?.snapshot?.status === "blocked") {
-      console.warn("::warning::資料已同步，但來源筆數下降觸發保護，未封存既有資料。請檢查收尾摘要，不代表來源已全數匹配。");
+      console.warn("::warning::��Ƥw�P�B�A���ӷ����ƤU��Ĳ�o�O�@�A���ʦs�J����ơC���ˬd�����K�n�A���N���ӷ��w���Ƥǰt�C");
     }
-    if(finalization?.snapshot?.status!=="blocked")await drainMediaQueue();
+    // Automatic synchronization never permanently purges queued media.
   }
   console.log(JSON.stringify(totals, null, 2));
-  if (totals.errors) throw new Error(`同步完成但有 ${totals.errors} 筆錯誤；已保留既有資料並略過封存，下次排程會重試。`);
+  if (totals.errors) throw new Error(`�P�B�������� ${totals.errors} �����~�F�w�O�d�J����ƨò��L�ʦs�A�U���Ƶ{�|���աC`);
 } else {
-  console.log("尚未設定 PROFILE_SYNC_ENDPOINT / PROFILE_SYNC_SECRET，因此只建立本機預覽，不會修改正式網站。 ");
+  console.log("�|���]�w PROFILE_SYNC_ENDPOINT / PROFILE_SYNC_SECRET�A�]���u�إߥ����w���A���|�ק勵�������C ");
 }
 
 
