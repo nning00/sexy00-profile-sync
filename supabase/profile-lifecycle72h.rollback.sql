@@ -11,7 +11,7 @@ begin
   if not pg_try_advisory_xact_lock(hashtextextended('sexy00-profile-cleanup',0)) then raise exception 'Cleanup is already running'; end if;
   -- Pinned fixed manifest. Copy once, verify, then reuse the same array.
   select array_agg(profile_id order by profile_id),
-    encode(sha256(convert_to(string_agg(profile_id::text,E'\n' order by profile_id),'UTF8')),'hex')
+    encode(sha256(convert_to(string_agg(profile_id::text,chr(10) order by profile_id),'UTF8')),'hex')
     into held_ids, held_hash from private.sexy00_purge_hold309;
   if coalesce(cardinality(held_ids),0)<>309 or held_hash is distinct from 'a3cf82662fce2750331bd3faeeb2b31e08d8bd39662997ff1fa7fe9f66d40f17' then
     raise exception 'Fixed purge hold manifest is unavailable or inconsistent' using errcode='P0001';
