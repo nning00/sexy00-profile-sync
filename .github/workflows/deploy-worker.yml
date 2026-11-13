@@ -55,7 +55,7 @@ jobs:
           WRANGLER_SEND_METRICS: 'false'
           NEXT_TELEMETRY_DISABLED: '1'
       - name: Release or restore baseline on failure
-        run: node scripts/controlled-release.mjs
+        run: node scripts/controlled-release.mjs --photo-policy-check --cleanup-check
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
           EXPECTED_PREVIOUS_VERSION: ${{ inputs.expected_previous_version }}
