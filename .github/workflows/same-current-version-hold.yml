@@ -1,0 +1,50 @@
+name: sexy00 same-current-version verification HOLD
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/same-current-version-hold.yml'
+      - 'scripts/verify-same-current-version.mjs'
+      - 'tests/same-current-version.test.mjs'
+  workflow_dispatch:
+    inputs:
+      approved_operation:
+        description: Requires explicit owner approval for this exact one-time operation
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: sexy00-production-operations
+  cancel-in-progress: false
+jobs:
+  offline-gate-tests:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.4'
+      - run: node --test tests/same-current-version.test.mjs
+  same-version:
+    # INACTIVE: remove only after owner approval and independent review.
+    if: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22.23.4'
+      - name: Verify exact current version only, never upload code or mutate data
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          APPROVED_OPERATION: ${{ inputs.approved_operation }}
+        run: node scripts/verify-same-current-version.mjs
