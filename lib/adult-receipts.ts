@@ -4,14 +4,98 @@ import { assertCleanupTarget, safeProfileMediaPath } from "./profile-media-gc";
 import { supabaseSchema } from "./site-instance";
 import { parseProfileDetails } from "./profile-details";
 import { adultIdentityBinding } from "./adult-receipt-policy";
+import type { AdultReviewSelection } from "./adult-publish-selection";
 
 type Db = ReturnType<typeof createAdminClient>;
 const MAX_BYTES = 15 * 1024 * 1024;
+const REVIEW_COLUMNS = "id,slug,status,adult_publish_hold,updated_at,source_key,source_url,display_name,introduction,source_content_hash,adult_verified_at,adult_review_status,card_image_path,profile_cities(cities(name)),profile_source_images(source_url,storage_path,created_at)";
+
+export async function confirmAndPublishAdultBatch(db: Db, selection: AdultReviewSelection[], reviewer: string) {
+  assertCleanupTarget();
+  if (supabaseSchema !== "public") throw new Error("Receipt schema mismatch");
+  const rows = await db.from("profiles").select(REVIEW_COLUMNS)
+    .eq("source_provider", "edc-public-catalog").eq("status","draft").eq("adult_review_status","pending")
+    .in("id",selection.map(row=>row.id));
+  if (rows.error || !rows.data) throw new Error("無法讀取這批待審資料，未送出上架。");
+  const byId = new Map(rows.data.map(row=>[row.id,row]));
+  const rejected: {id:string;reason:string}[]=[];
+  const candidates=selection.flatMap(item=>{
+    const row=byId.get(item.id);
+    if(!row?.source_content_hash || row.updated_at!==item.version) {
+      rejected.push({id:item.id,reason:"資料已更新或已處理，請重新整理。"});
+      return [];
+    }
+    const photos=row.profile_source_images??[];
+    if(!photos.length || photos.length>3 || !photos.some(photo=>photo.storage_path===row.card_image_path) ||
+      !photos.every(photo=>safeProfileMediaPath(photo.storage_path))) {
+      rejected.push({id:item.id,reason:"需先有完整且正確的來源照片，未發布。"});
+      return [];
+    }
+    return [{row,item,photos}];
+  });
+  if(!candidates.length)return {published:[],failed:rejected};
+  const paths=[...new Set(candidates.flatMap(({photos})=>photos.map(photo=>photo.storage_path)))];
+  const stamps=await db.rpc("sexy00_adult_review_media_versions",{p_paths:paths});
+  if(stamps.error || !Array.isArray(stamps.data)) throw new Error("無法核對來源照片版本，未送出上架。");
+  const media=new Map<string,{object_id:string;revision:string;updated_at:string}>();
+  for(const v of stamps.data) {
+    if(typeof v.storage_path==="string" && typeof v.object_id==="string" && typeof v.revision==="string" && v.revision &&
+      typeof v.updated_at==="string") media.set(v.storage_path,v);
+  }
+  const proofs=[];
+  // Keep at most two in-flight downloads. The SQL transaction rechecks
+  // every locked Storage object against its pre-download version.
+  for(let i=0;i<candidates.length;i+=2) {
+    proofs.push(...await Promise.all(candidates.slice(i,i+2).map(async ({item,row,photos})=>{
+      const cityNames=row.profile_cities.flatMap(assignment=>{
+        const city=assignment.cities as unknown as {name?:string}|null;
+        return city?.name?[city.name]:[];
+      }).sort();
+      const snapshot={source_key:row.source_key,source_url:row.source_url,display_name:row.display_name,introduction:row.introduction,city_names:cityNames};
+      const binding=adultIdentityBinding({sourceKey:row.source_key,sourceUrl:row.source_url,displayName:row.display_name,cityNames,details:parseProfileDetails(row.introduction)});
+      const evidence=[];
+      for(const photo of photos) {
+        const stamp=media.get(photo.storage_path);
+        if(!stamp)return {id:item.id,reason:"來源照片已遺失或無法核對版本，未發布。"} as const;
+        try {
+          const download=await db.storage.from("site-media").download(photo.storage_path,{cacheNonce:stamp.revision},
+            {cache:"no-store",signal:AbortSignal.timeout(12000)});
+          if(download.error || !download.data || !download.data.size || download.data.size>MAX_BYTES) throw new Error("Photo unavailable");
+          const sha256=createHash("sha256").update(binding).update("\0").update(new Uint8Array(await download.data.arrayBuffer())).digest("hex");
+          evidence.push({source_url:photo.source_url,storage_path:photo.storage_path,sha256,profile_snapshot:snapshot,
+            object_id:stamp.object_id,revision:stamp.revision,updated_at:stamp.updated_at});
+        } catch {
+          return {id:item.id,reason:"來源照片暫時無法讀取，未發布。"} as const;
+        }
+      }
+      return {id:item.id,version:item.version,hash:row.source_content_hash,photos:evidence};
+    })));
+  }
+  const prepared=proofs.flatMap(proof=>{
+    if("reason" in proof){rejected.push({id:proof.id,reason:proof.reason!});return [];}
+    return [proof];
+  });
+  if(!prepared.length)return {published:[],failed:rejected};
+  const saved=await db.rpc("sexy00_confirm_publish_adult_batch",{p_records:prepared,p_reviewer:reviewer});
+  if(saved.error || !Array.isArray(saved.data) || saved.data.length!==prepared.length) {
+    throw new Error("未收到這批的完整回覆，請重新整理核對後再操作。");
+  }
+  const expected=new Set(prepared.map(p=>p.id));
+  const published:{id:string;slug:string}[]=[];
+  for(const result of saved.data) {
+    if(!expected.delete(result.id))throw new Error("批次回覆不完整，請重新整理核對。");
+    if(result.status==="published" && typeof result.slug==="string" && result.slug)published.push({id:result.id,slug:result.slug});
+    else if(result.status==="not-eligible")rejected.push({id:result.id,reason:"資料、照片或成年審查條件已變更，未發布。"});
+    else throw new Error("批次回覆不完整，請重新整理核對。");
+  }
+  return {published,failed:rejected};
+}
+
 async function readAdultEvidence(db: Db, profileId: string, reviewer: string | null, expectedVersion?: string) {
   assertCleanupTarget();
   if(supabaseSchema !== "public")throw new Error("Receipt schema mismatch");
   const { data: profile, error } = await db.from("profiles")
-    .select("id,slug,status,adult_publish_hold,updated_at,source_key,source_url,display_name,introduction,source_content_hash,adult_verified_at,adult_review_status,profile_cities(cities(name)),profile_source_images(source_url,storage_path,created_at)")
+    .select(REVIEW_COLUMNS)
     .eq("id", profileId).eq("source_provider", "edc-public-catalog").single();
   if (error || !profile?.source_content_hash) throw new Error("資料正在同步或已變更，請重新整理後再確認。");
   if (expectedVersion && (profile.updated_at !== expectedVersion || profile.status !== "draft" ||

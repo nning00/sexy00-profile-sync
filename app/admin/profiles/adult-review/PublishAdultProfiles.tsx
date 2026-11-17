@@ -3,7 +3,7 @@
 import { useRef,useState,type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ADULT_PUBLISH_BATCH,ADULT_REVIEW_PAGE_SIZES,adultReviewPageHref,reviewSelectionKey,selectedReviewRows,checkPublishedProfileUrl,type AdultPublishMode,type AdultReviewPageSize,type AdultReviewSelection,type CheckedUrl } from "@/lib/adult-publish-selection";
+import { ADULT_CONFIRM_PUBLISH_BATCH,ADULT_PUBLISH_BATCH,ADULT_REVIEW_PAGE_SIZES,adultReviewPageHref,reviewSelectionKey,selectedReviewRows,checkPublishedProfileUrl,type AdultPublishMode,type AdultReviewPageSize,type AdultReviewSelection,type CheckedUrl } from "@/lib/adult-publish-selection";
 import { publishAdultBatch } from "./actions";
 
 type ReviewRow = AdultReviewSelection & { name:string };
@@ -35,6 +35,7 @@ export default function PublishAdultProfiles({ pending,pendingError,ready,pageNu
   async function publish(rows:ReviewRow[],mode:AdultPublishMode,scope:string){
     if(running.current || !rows.length)return;
     const confirmAdult=mode==="confirm-and-publish";
+    const batchSize=confirmAdult?ADULT_CONFIRM_PUBLISH_BATCH:ADULT_PUBLISH_BATCH;
     const message=confirmAdult
       ? `你確定已逐一查核${scope} ${rows.length} 筆資料，並確認每位本人已滿 18 歲？確認後會立即發布到前台，其他資料不變。`
       : `確定補發已勾選的 ${rows.length} 筆已確認成年資料？其他資料不變。`;
@@ -46,11 +47,11 @@ export default function PublishAdultProfiles({ pending,pendingError,ready,pageNu
     const names=new Map(rows.map(row=>[row.id,row.name]));
     let processed=0;
     try {
-      for(let index=0;index<rows.length;index+=ADULT_PUBLISH_BATCH){
+      for(let index=0;index<rows.length;index+=batchSize){
         setProgress(`正在上架 ${processed}/${rows.length} 筆…`);
-        const batch=rows.slice(index,index+ADULT_PUBLISH_BATCH).map(({id,version})=>({id,version}));
+        const batch=rows.slice(index,index+batchSize).map(({id,version})=>({id,version}));
         const response=await publishAdultBatch(batch,mode,confirmAdult);
-        if(response.error)throw new Error(response.error);
+        if(response.error){failures.push(response.error);break;}
         for(const {path} of response.published)paths.push(path);
         for(const {id,reason} of response.failed)failures.push(`${names.get(id)??"已選資料"}：${reason}`);
         processed+=batch.length;

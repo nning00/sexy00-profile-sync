@@ -38,6 +38,13 @@ jobs:
           node tests/profile-lifecycle72h-postgres.mjs > /tmp/lifecycle-fixture.sql
           psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d lifecycle_test -f /tmp/lifecycle-fixture.sql
 
+      - name: Verify batch publication against a separate synthetic database
+        env:
+          PGPASSWORD: isolated-test-only
+        run: |
+          createdb -h 127.0.0.1 -U postgres adult_batch_test
+          psql -X -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d adult_batch_test -f tests/adult-batch-publish-postgres.sql
+
   worker-checks:
     name: sexy00-lifecycle72h-worker
     runs-on: ubuntu-24.04

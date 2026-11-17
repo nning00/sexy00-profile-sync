@@ -11,7 +11,7 @@ const hooks=registerHooks({
     return next(specifier,context);
   },
 });
-const { confirmAndPublishAdultDraft,publishAdultDraft }=await import("../lib/adult-receipts.ts");
+const { confirmAndPublishAdultBatch,confirmAndPublishAdultDraft,publishAdultDraft }=await import("../lib/adult-receipts.ts");
 hooks.deregister();
 
 process.env.NEXT_PUBLIC_SUPABASE_URL="https://kkxsclcqdxoiqucunpur.supabase.co";
@@ -90,4 +90,49 @@ test("a stage rejection, changed photo bytes, or publish rejection does not make
     assert.equal(f.calls.length,options.publishFails?2:1);
     assert.equal(f.row.adult_publish_hold,!options.stageFails);
   }
+});
+
+test("prepared photos are read once and only one RPC commits eligible drafts together",async()=>{
+  const more="00000000-0000-4000-8000-000000000003";
+  const stale="00000000-0000-4000-8000-000000000004";
+  const missing="00000000-0000-4000-8000-000000000005";
+  const proofRows=[{id,slug:"old-url"},{id:more,slug:"another-old-url"},{id:stale,slug:"stale"},{id:missing,slug:"missing"}].map(x=>{
+    const storage_path=`gpt-copy/profiles/qa/${x.slug}.jpg`;
+    return {...fixture().row,...x,card_image_path:storage_path,profile_source_images:[{...sourcePhoto,storage_path}]};
+  });
+  const versionFor=(storage_path)=>({storage_path,object_id:id,revision:"mock-version",updated_at:version});
+  const reads=[];const writes=[];
+  const db={
+    from(table){
+      assert.equal(table,"profiles");
+      return {select(){return this;},eq(){return this;},async in(_,ids){
+        assert.deepEqual(ids,[id,more,stale,missing]);return {data:proofRows};
+      }};
+    },
+    storage:{from(bucket){
+      assert.equal(bucket,"site-media");
+      return {async download(path,opts,fetchOpts){
+        reads.push(path);assert.equal(opts.cacheNonce,"mock-version");assert.equal(fetchOpts.cache,"no-store");
+        return {data:new Blob([`fake bytes: ${path}`])};
+      }};
+    }},
+    async rpc(op,args) {
+      if(op==="sexy00_adult_review_media_versions"){
+        assert.equal(args.p_paths.length,3);
+        return {data:args.p_paths.filter(path=>!path.includes("missing")).map(versionFor)};
+      }
+      assert.equal(op,"sexy00_confirm_publish_adult_batch");
+      writes.push(args);
+      return {data:[{id,status:"published",slug:"old-url"},{id:more,status:"not-eligible"}]};
+    },
+  };
+  const result=await confirmAndPublishAdultBatch(db,[{id,version},{id:more,version},{id:stale,version:nextVersion},{id:missing,version}],reviewer);
+  assert.equal(writes.length,1);
+  assert.deepEqual(writes[0].p_records.map(r=>r.id),[id,more]);
+  assert.equal(writes[0].p_reviewer,reviewer);
+  assert.equal(reads.length,2);
+  assert.equal(writes[0].p_records[0].photos[0].revision,"mock-version");
+  assert.match(writes[0].p_records[0].photos[0].sha256,/^[a-f0-9]{64}$/);
+  assert.deepEqual(result.published,[{id,slug:"old-url"}]);
+  assert.deepEqual(result.failed.map(r=>r.id).sort(),[more,stale,missing].sort());
 });
