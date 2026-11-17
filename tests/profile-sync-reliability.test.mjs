@@ -222,3 +222,6 @@ test("partial streaming body is discarded before a complete retry", async () => 
   } });
   assert.equal(calls, 2); assert.deepEqual(r.data, [{ id: 2 }]);
 });
+
+// Run the source-normalization regressions in the existing offline CI entrypoint.
+import "./profile-source-normalization.test.mjs";
