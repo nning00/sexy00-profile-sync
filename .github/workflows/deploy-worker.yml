@@ -1,17 +1,13 @@
-name: Controlled sexy00 release
+name: sexy00 same-current-version verification HOLD
 on:
   workflow_dispatch:
     inputs:
-      expected_sha:
-        description: Exact approved main SHA
+      approved_sha:
+        description: Exact independently reviewed branch commit
         required: true
         type: string
-      expected_previous_version:
-        description: Exact verified current 100 percent Cloudflare version
-        required: true
-        type: string
-      expected_previous_deployment:
-        description: Exact verified current Cloudflare deployment ID
+      approved_operation:
+        description: Requires explicit owner approval for this exact one-time operation
         required: true
         type: string
 permissions:
@@ -21,55 +17,23 @@ concurrency:
   group: sexy00-production-operations
   cancel-in-progress: false
 jobs:
-  identity:
-    runs-on: ubuntu-latest
+  same-version:
+    # Isolated, one-time rollback verification branch; never merge this workflow.
+    if: github.event_name == 'workflow_dispatch' && github.repository == 'nning00/sexy00-profile-sync' && github.ref == 'refs/heads/codex/sexy00-rollback-baseline-adult-batch-20261117' && github.run_attempt == 1 && inputs.approved_operation == 'sexy00-same-current-version-once' && inputs.approved_sha == github.sha
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - name: Refuse wrong ref, stale input and rerun attempts
-        env:
-          EXPECTED: ${{ inputs.expected_sha }}
-        run: |
-          test "$GITHUB_EVENT_NAME" = workflow_dispatch
-          test "$GITHUB_REF" = refs/heads/main
-          test "$GITHUB_SHA" = "$EXPECTED"
-          test "$GITHUB_RUN_ATTEMPT" = 1
-  validate:
-    needs: identity
-    uses: ./.github/workflows/lifecycle72h-pr-ci.yml
-  release:
-    # Official same-version rollback verified in run 43374515895; sync stays disabled.
-    needs: [identity, validate]
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '22'
-      - run: corepack enable
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+          node-version: '22.23.4'
+      - run: node --test tests/same-current-version.test.mjs
+      - name: Verify exact current version only, never upload code or mutate data
         env:
-          WRANGLER_SEND_METRICS: 'false'
-          NEXT_TELEMETRY_DISABLED: '1'
-      - name: Release or restore baseline on failure
-        run: node scripts/controlled-release.mjs --photo-policy-check --cleanup-check
-        env:
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
-          EXPECTED_PREVIOUS_VERSION: ${{ inputs.expected_previous_version }}
-          EXPECTED_PREVIOUS_DEPLOYMENT: ${{ inputs.expected_previous_deployment }}
-          CI: 'true'
-          GH_TOKEN: ${{ github.token }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          PROFILE_SYNC_SECRET: ${{ secrets.PROFILE_SYNC_SECRET }}
-          WRANGLER_SEND_METRICS: 'false'
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: release-evidence-${{ github.run_id }}
-          path: release-evidence/
-          if-no-files-found: warn
-
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPROVED_OPERATION: ${{ inputs.approved_operation }}
+        run: node scripts/verify-same-current-version.mjs
