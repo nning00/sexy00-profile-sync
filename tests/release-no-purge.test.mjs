@@ -6,8 +6,8 @@ const runner=readFileSync('scripts/edc-profile-sync.mjs','utf8');
 test('release adapter targets only the correct sexy00 repository and baseline',()=>{
  const adapter=readFileSync('scripts/controlled-release.mjs','utf8');
  assert.match(adapter,/repo='nning00\/sexy00-profile-sync'/);
- assert.match(adapter,/1156a0b5-e73d-4ef3-9488-a9584e73f624/);
- assert.match(adapter,/0003c7c6-8e3a-4aa0-a3db-649cdfcc4880/);
+ assert.match(adapter,/85b5ec29-2c24-462d-bc05-3ce3f2371c35/);
+ assert.match(adapter,/3f6a3050-b987-4a74-8f12-42fd5bea500f/);
  assert.doesNotMatch(adapter,/sexytw|sexyning|nning00\/sexy00-site/);
 });
 test('automatic synchronization cannot drain permanent media queue',()=>{
