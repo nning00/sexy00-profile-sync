@@ -910,6 +910,8 @@ h2 { margin: 0; font-size: clamp(36px, 4vw, 58px); line-height: 1.4; letter-spac
 .admin-review-all-form small { color: var(--muted); line-height: 1.65; }
 .admin-review-ready { margin: 24px 0; padding: 18px; border: 1px solid var(--line); background: white; }
 .admin-review-ready .admin-review-all-form { margin: 14px 0; flex-wrap: wrap; }
+.admin-review-row-choice { grid-column: 1 / -1; padding: 12px 16px; min-height: 44px; border-top: 1px solid var(--line); cursor: pointer; }
+.admin-review-bottom { margin-top: 16px; }
 .admin-review-selection { padding: 0; list-style: none; }
 .admin-review-selection li, .admin-review-pagination { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; padding: 8px 0; }
 .admin-review-selection li { border-bottom: 1px solid var(--line); }
