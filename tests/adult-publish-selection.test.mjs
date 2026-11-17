@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ADULT_PUBLISH_BATCH,ADULT_REVIEW_PAGE_SIZES,adultReviewPageOptions,adultReviewPageHref,validReviewSelection,validAdultPublishIntent,reviewSelectionKey,selectedReviewRows,checkPublishedProfileUrl } from "../lib/adult-publish-selection.ts";
+import { ADULT_CONFIRM_PUBLISH_BATCH,ADULT_PUBLISH_BATCH,ADULT_REVIEW_PAGE_SIZES,adultReviewPageOptions,adultReviewPageHref,validReviewSelection,validAdultPublishIntent,reviewSelectionKey,selectedReviewRows,checkPublishedProfileUrl } from "../lib/adult-publish-selection.ts";
 import { syncAdultReview } from "../lib/adult-receipt-policy.ts";
 import { hideProfileAgeText } from "../lib/profile-details.ts";
 
@@ -14,7 +14,7 @@ test("page size is allowlisted, defaults to 100, and uses a non-overlapping incl
   }
   for(const val of ["1000","500.0","-100","50",["500","200"]]) assert.equal(adultReviewPageOptions("0",val).pageSize,100);
 });
-test("selecting a 500-row page can be narrowed and does not increase write batch size",()=>{
+test("selecting a 500-row page can be narrowed and writes stay bounded per operation",()=>{
   const rows=Array.from({length:500},(_,i)=>({...row(0),id:`00000000-0000-4000-8000-${i.toString(16).padStart(12,"0")}`}));
   const checked=new Set(rows.map(reviewSelectionKey));
   checked.delete(reviewSelectionKey(rows[4]));
@@ -22,7 +22,12 @@ test("selecting a 500-row page can be narrowed and does not increase write batch
   assert.equal(chosen.length,499);
   assert.ok(!chosen.includes(rows[4]));
   assert.equal(validReviewSelection(chosen),false);
-  for(let i=0;i<chosen.length;i+=ADULT_PUBLISH_BATCH)assert.ok(validReviewSelection(chosen.slice(i,i+ADULT_PUBLISH_BATCH)));
+  assert.equal(ADULT_CONFIRM_PUBLISH_BATCH,8);
+  assert.equal(ADULT_PUBLISH_BATCH,3);
+  assert.equal(validReviewSelection(chosen.slice(0,9),ADULT_CONFIRM_PUBLISH_BATCH),false);
+  for(let i=0;i<chosen.length;i+=ADULT_CONFIRM_PUBLISH_BATCH) {
+    assert.ok(validReviewSelection(chosen.slice(i,i+ADULT_CONFIRM_PUBLISH_BATCH),ADULT_CONFIRM_PUBLISH_BATCH));
+  }
 });
 test("manual selection is tied to the displayed row version and page",()=>{
   const list=[row(1),row(2)];

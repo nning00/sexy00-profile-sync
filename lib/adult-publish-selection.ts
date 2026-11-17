@@ -1,4 +1,5 @@
 export const ADULT_PUBLISH_BATCH = 3;
+export const ADULT_CONFIRM_PUBLISH_BATCH = 8;
 export const ADULT_REVIEW_PAGE_SIZES = [100, 200, 500] as const;
 export type AdultReviewPageSize = (typeof ADULT_REVIEW_PAGE_SIZES)[number];
 export type AdultReviewSelection = {id:string;version:string};
@@ -15,8 +16,8 @@ export function adultReviewPageHref(page: number, size: AdultReviewPageSize) {
   return `?page=${page}&size=${size}`;
 }
 
-export function validReviewSelection(value: unknown): value is AdultReviewSelection[] {
-  if (!Array.isArray(value) || !value.length || value.length > ADULT_PUBLISH_BATCH) return false;
+export function validReviewSelection(value: unknown, limit: number = ADULT_PUBLISH_BATCH): value is AdultReviewSelection[] {
+  if (!Array.isArray(value) || !value.length || value.length > limit) return false;
   const unique=new Set<string>();
   return value.every(item=>{
     if (!item || typeof item.id!=="string" || !UUID.test(item.id) || unique.has(item.id.toLowerCase())
