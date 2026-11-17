@@ -1,11 +1,29 @@
 import {pathToFileURL} from 'node:url';
-export const EXPECTED_VERSION='497a639b-c263-49b4-a240-5313284bb58f';
-export async function verifySameVersion({account,token,approval,repository,attempt,fetchImpl=fetch}){
+export const EXPECTED_DEPLOYMENT='22c797be-e973-44ee-a4eb-6c5f9f4283d2';
+export const EXPECTED_MAIN='d3230fa8b265a1d3eae672a7bef9395b3b2a36ad';
+export const EXPECTED_VERSION='0003c7c6-8e3a-4aa0-a3db-649cdfcc4880';
+export async function verifySameVersion({account,token,githubToken,approval,repository,attempt,fetchImpl=fetch}){
  if(approval!=='sexy00-same-current-version-once'||repository!=='nning00/sexy00-profile-sync'||String(attempt)!=='1')throw Error('Explicit single-attempt authorization missing');
  if(!/^[a-f0-9]{32}$/.test(account||'')||!token)throw Error('Existing sexy00 credentials missing');
+ if(!githubToken)throw Error('Existing GitHub Actions token missing');
+ const ghBase='https://api.github.com/repos/nning00/sexy00-profile-sync/';
+ async function readGithub(path){
+  const response=await fetchImpl(ghBase+path,{headers:{Authorization:'Bearer '+githubToken,Accept:'application/vnd.github+json'},redirect:'error',signal:AbortSignal.timeout(20000)});
+  if(!response.ok)throw Error('GitHub state unavailable; stop');
+  return await response.json();
+ }
+ async function assertGuards(){
+  const main=await readGithub('git/ref/heads/main');
+  if(main.object?.sha!==EXPECTED_MAIN)throw Error('Main changed; stop before production operation');
+  const sync=await readGithub('actions/workflows/profile-sync.yml');
+  if(sync.state!=='disabled_manually')throw Error('Sync is not paused; stop before production operation');
+  const recent=await readGithub('actions/workflows/profile-sync.yml/runs?per_page=100');
+  if(!Array.isArray(recent.workflow_runs)||recent.workflow_runs.some(run=>run?.status!=='completed'))throw Error('Sync run outstanding or unknown; stop');
+ }
+ await assertGuards();
  const endpoint='https://api.cloudflare.com/client/v4/accounts/'+account+'/workers/scripts/sexy00-site/deployments';
  async function read(){
-  const r=await fetchImpl(endpoint,{headers:{Authorization:'Bearer '+token},signal:AbortSignal.timeout(20000)});
+  const r=await fetchImpl(endpoint,{headers:{Authorization:'Bearer '+token},redirect:'error',signal:AbortSignal.timeout(20000)});
   const d=await r.json();
   if(!r.ok||d.success!==true)throw Error('Deployment read failed');
   const rows=d.result?.deployments??d.result;
@@ -20,28 +38,31 @@ export async function verifySameVersion({account,token,approval,repository,attem
   if(!r.ok||d.ok!==true||d.database!=='connected')throw Error('Health check failed');
  }
  const before=await read();
+ if(before.id!==EXPECTED_DEPLOYMENT)throw Error('Approved deployment baseline changed; stop');
  await health();
  // Recheck immediately before mutation, never force a newer deployment back.
+ await assertGuards();
  const immediate=await read();
  if(immediate.id!==before.id)throw Error('Deployment changed during health check');
- let submitted=false;
+ let createdDeployment;
  try{
   // Exactly one POST. No retry if outcome is ambiguous.
   const r=await fetchImpl(endpoint,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
    body:JSON.stringify({strategy:'percentage',versions:[{version_id:EXPECTED_VERSION,percentage:100}],annotations:{'workers/message':'Approved sexy00 same-current-version rollback capability verification'}}),
-   signal:AbortSignal.timeout(20000)});
+   redirect:'error',signal:AbortSignal.timeout(20000)});
   const d=await r.json();
   if(!r.ok||d.success!==true)throw Error('Same-version submission rejected');
-  submitted=true;
+  createdDeployment=d.result?.id;
+  if(!/^[a-f0-9-]{36}$/.test(createdDeployment||'')||createdDeployment===before.id)throw Error('POST deployment identity unavailable');
  }catch(error){
   throw Error('Same-version submission failed or outcome unknown; DO NOT RETRY automatically',{cause:error});
  }
  const after=await read();
- if(after.id===before.id)throw Error('No new deployment record; operation not verified');
+ if(after.id!==createdDeployment)throw Error('Active deployment does not match the POST response; do not retry');
  await health();
- return {worker:'sexy00-site',version:EXPECTED_VERSION,beforeDeployment:before.id,afterDeployment:after.id,submitted,health:'passed',sameVersionVerified:true};
+ return {worker:'sexy00-site',version:EXPECTED_VERSION,beforeDeployment:before.id,afterDeployment:after.id,submitted:true,health:'passed',sameVersionVerified:true};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
- const out=await verifySameVersion({account:process.env.CLOUDFLARE_ACCOUNT_ID,token:process.env.CLOUDFLARE_API_TOKEN,approval:process.env.APPROVED_OPERATION,repository:process.env.GITHUB_REPOSITORY,attempt:process.env.GITHUB_RUN_ATTEMPT});
+ const out=await verifySameVersion({account:process.env.CLOUDFLARE_ACCOUNT_ID,token:process.env.CLOUDFLARE_API_TOKEN,githubToken:process.env.GITHUB_TOKEN,approval:process.env.APPROVED_OPERATION,repository:process.env.GITHUB_REPOSITORY,attempt:process.env.GITHUB_RUN_ATTEMPT});
  console.log(JSON.stringify(out));
 }
