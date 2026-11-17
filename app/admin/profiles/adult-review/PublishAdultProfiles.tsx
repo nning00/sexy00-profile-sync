@@ -2,14 +2,17 @@
 
 import { useRef,useState,type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ADULT_PUBLISH_BATCH,reviewSelectionKey,selectedReviewRows,checkPublishedProfileUrl,type AdultPublishMode,type AdultReviewSelection,type CheckedUrl } from "@/lib/adult-publish-selection";
+import Link from "next/link";
+import { ADULT_PUBLISH_BATCH,ADULT_REVIEW_PAGE_SIZES,adultReviewPageHref,reviewSelectionKey,selectedReviewRows,checkPublishedProfileUrl,type AdultPublishMode,type AdultReviewPageSize,type AdultReviewSelection,type CheckedUrl } from "@/lib/adult-publish-selection";
 import { publishAdultBatch } from "./actions";
 
 type ReviewRow = AdultReviewSelection & { name:string };
 type Ready = ReviewRow & { slug:string };
 type Pending = ReviewRow & { content:ReactNode };
 
-export default function PublishAdultProfiles({ pending,pendingError,ready }: {pending:Pending[];pendingError:boolean;ready:Ready[]|null}) {
+export default function PublishAdultProfiles({ pending,pendingError,ready,pageNumber,pageSize,total }: {
+  pending:Pending[];pendingError:boolean;ready:Ready[]|null;pageNumber:number;pageSize:AdultReviewPageSize;total:number;
+}) {
   const router=useRouter();
   const running=useRef(false);
   const [selected,setSelected]=useState(new Set<string>());
@@ -68,12 +71,18 @@ export default function PublishAdultProfiles({ pending,pendingError,ready }: {pe
   const publishSelected=()=>publish(chosen,"confirm-and-publish","已勾選的");
   return <>
     <section aria-labelledby="adult-publish-title" className="admin-review-ready" aria-busy={busy}>
-      <h2 id="adult-publish-title">一鍵確認成年並上架</h2>
-      <p>整頁都已查核，可以一鍵處理本頁。只查核部分時，請在下方勾選，未勾選的資料會繼續待審。</p>
+      <h2 id="adult-publish-title">批次確認成年並上架</h2>
+      <p>全選只勾選目前這一頁，不會上架。可取消未查核的資料，再按「保存並上架勾選」核對筆數。</p>
+      <nav className="admin-review-pagination" aria-label="待確認資料每頁筆數">
+        {ADULT_REVIEW_PAGE_SIZES.map(size => size === pageSize
+          ? <strong key={size} aria-current="true">每頁 {size} 位</strong>
+          : busy ? <span key={size}>每頁 {size} 位</span>
+          : <Link key={size} href={adultReviewPageHref(1,size)} prefetch={false}>每頁 {size} 位</Link>)}
+      </nav>
       <div className="admin-review-all-form">
-        <button className="admin-review-all-button" type="button" disabled={busy || !pending.length || !!chosen.length}
-          onClick={()=>publish(pending,"confirm-and-publish","本頁全部")}>一鍵確認並上架本頁（{pending.length} 筆）</button>
-        <button type="button" disabled={busy || !chosen.length} onClick={publishSelected}>保存並上架勾選（{chosen.length} 筆）</button>
+        <button type="button" disabled={busy || !pending.length || chosen.length===pending.length}
+          onClick={()=>setSelected(new Set(pending.map(reviewSelectionKey)))}>全選本頁（{pending.length} 筆）</button>
+        <button className="admin-review-all-button" type="button" disabled={busy || !chosen.length} onClick={publishSelected}>保存並上架勾選（{chosen.length} 筆）</button>
         {!!chosen.length && <button type="button" disabled={busy} onClick={()=>setSelected(new Set())}>取消勾選</button>}
       </div>
       {ready===null && <p className="admin-error">無法讀取補發資料，請重新整理後再試。</p>}
@@ -91,7 +100,7 @@ export default function PublishAdultProfiles({ pending,pendingError,ready }: {pe
         </li>)}</ul>
       </details>}
     </section>
-    <div role="status" aria-live="polite">{progress}</div>
+    <div role="status" aria-live="polite">{progress}{busy && " 請留在本頁直到處理完畢。"}</div>
     {result && <div className="admin-review-result" role="status">
       <p>已上架 {result.checks.length} 筆；原網址正常 {result.checks.length-problems.length} 筆，404 {problems.filter(x=>x.status===404).length} 筆，其他異常 {problems.filter(x=>x.status!==404).length} 筆。</p>
       {!!problems.length && <ul>{problems.map(x=><li key={x.path}><a href={x.path} target="_blank" rel="noopener noreferrer">{x.path}</a>：{x.status??"連線失敗"}{x.redirected?"（有轉址）":""}</li>)}</ul>}
@@ -115,5 +124,10 @@ export default function PublishAdultProfiles({ pending,pendingError,ready }: {pe
         保存並上架勾選（{chosen.length} 筆）
       </button>
     </div>}
+    <nav className="admin-review-pagination" aria-label="待確認資料分頁">
+      {!busy && pageNumber>1 && <Link href={adultReviewPageHref(pageNumber-1,pageSize)} prefetch={false}>上一頁</Link>}
+      <span>第 {pageNumber} 頁</span>
+      {!busy && pageNumber*pageSize<total && <Link href={adultReviewPageHref(pageNumber+1,pageSize)} prefetch={false}>下一頁</Link>}
+    </nav>
   </>;
 }

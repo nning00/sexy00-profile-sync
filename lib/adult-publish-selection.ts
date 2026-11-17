@@ -1,7 +1,19 @@
 export const ADULT_PUBLISH_BATCH = 3;
+export const ADULT_REVIEW_PAGE_SIZES = [100, 200, 500] as const;
+export type AdultReviewPageSize = (typeof ADULT_REVIEW_PAGE_SIZES)[number];
 export type AdultReviewSelection = {id:string;version:string};
 export type AdultPublishMode = "confirm-and-publish" | "publish-existing";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function adultReviewPageOptions(page: unknown, size: unknown) {
+  const pageNumber = typeof page === "string" && /^\d{1,4}$/.test(page) ? Math.max(1, Number(page)) : 1;
+  const pageSize = ADULT_REVIEW_PAGE_SIZES.find(value => String(value) === size) ?? ADULT_REVIEW_PAGE_SIZES[0];
+  return {pageNumber,pageSize,from:(pageNumber-1)*pageSize,to:pageNumber*pageSize-1};
+}
+
+export function adultReviewPageHref(page: number, size: AdultReviewPageSize) {
+  return `?page=${page}&size=${size}`;
+}
 
 export function validReviewSelection(value: unknown): value is AdultReviewSelection[] {
   if (!Array.isArray(value) || !value.length || value.length > ADULT_PUBLISH_BATCH) return false;
