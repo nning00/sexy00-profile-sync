@@ -1,5 +1,6 @@
 export const ADULT_PUBLISH_BATCH = 3;
 export type AdultReviewSelection = {id:string;version:string};
+export type AdultPublishMode = "confirm-and-publish" | "publish-existing";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function validReviewSelection(value: unknown): value is AdultReviewSelection[] {
@@ -13,8 +14,16 @@ export function validReviewSelection(value: unknown): value is AdultReviewSelect
   });
 }
 
-export function selectedReviewRows<T extends AdultReviewSelection>(rows: T[], ids: ReadonlySet<string>) {
-  return rows.filter(row=>ids.has(row.id));
+export function reviewSelectionKey(row: AdultReviewSelection) {
+  return `${row.id}:${row.version}`;
+}
+
+export function selectedReviewRows<T extends AdultReviewSelection>(rows: T[], keys: ReadonlySet<string>) {
+  return rows.filter(row=>keys.has(reviewSelectionKey(row)));
+}
+
+export function validAdultPublishIntent(mode: unknown, affirmed: unknown): mode is AdultPublishMode {
+  return mode === "confirm-and-publish" ? affirmed === true : mode === "publish-existing" && affirmed === false;
 }
 
 export type CheckedUrl = {path:string;status:number|null;redirected:boolean};

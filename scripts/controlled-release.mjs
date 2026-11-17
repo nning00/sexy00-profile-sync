@@ -15,7 +15,7 @@ const tag=e.GITHUB_SHA+'-'+e.GITHUB_RUN_ID;
 await controlledRelease({
  async validate(){
   const head=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();if(head!==e.GITHUB_SHA)throw Error('CHECKOUT_SHA_MISMATCH');
-  if(e.EXPECTED_PREVIOUS_VERSION!=='497a639b-c263-49b4-a240-5313284bb58f'||e.EXPECTED_PREVIOUS_DEPLOYMENT!=='f3c5d01c-8d01-4dc5-9c79-e12f5c313e68')throw Error('UNVERIFIED_ROLLBACK_BASELINE');
+  if(e.EXPECTED_PREVIOUS_VERSION!=='37f98830-2e09-497f-9448-3ef5da71cb3a'||e.EXPECTED_PREVIOUS_DEPLOYMENT!=='6cc29f9e-80ce-4503-a0ae-188b8e0300ce')throw Error('UNVERIFIED_ROLLBACK_BASELINE');
   const own=JSON.parse(readFileSync('package.json','utf8'));if(own.devDependencies.wrangler!=='4.92.0')throw Error('WRANGLER_VERSION_DRIFT');
   const target=JSON.parse(readFileSync(config,'utf8'));if(target.name!=='sexy00-site'||target.keep_vars!==true)throw Error('WRONG_WORKER_OR_VARIABLE_RETENTION');
   const history=await gh('actions/workflows/deploy-worker.yml/runs?per_page=100');previousReleaseGate(history.workflow_runs,e.GITHUB_RUN_ID);

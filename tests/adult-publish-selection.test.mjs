@@ -1,14 +1,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validReviewSelection,selectedReviewRows,checkPublishedProfileUrl } from "../lib/adult-publish-selection.ts";
+import { validReviewSelection,validAdultPublishIntent,reviewSelectionKey,selectedReviewRows,checkPublishedProfileUrl } from "../lib/adult-publish-selection.ts";
 import { syncAdultReview } from "../lib/adult-receipt-policy.ts";
 import { hideProfileAgeText } from "../lib/profile-details.ts";
 
 const row=(n)=>({id:`00000000-0000-4000-8000-00000000000${n}`,version:"2026-11-10T12:00:00.123456+00:00"});
-test("select-all scope is the eligible list; untouched and stale IDs are not submitted",()=>{
+test("manual selection is tied to the displayed row version and page",()=>{
   const list=[row(1),row(2)];
-  assert.deepEqual(selectedReviewRows(list,new Set([row(1).id,row(3).id])),[row(1)]);
-  assert.deepEqual(selectedReviewRows(list,new Set(list.map(r=>r.id))),list);
+  const oldRow2={...row(2),version:"2026-11-10T11:00:00+00:00"};
+  assert.deepEqual(selectedReviewRows(list,new Set([row(1),oldRow2,row(3)].map(reviewSelectionKey))),[row(1)]);
+  assert.deepEqual(selectedReviewRows(list,new Set(list.map(reviewSelectionKey))),list);
+});
+test("new adult confirmations require explicit affirmation and cannot use the legacy publish mode",()=>{
+  assert.equal(validAdultPublishIntent("confirm-and-publish",true),true);
+  assert.equal(validAdultPublishIntent("publish-existing",false),true);
+  for(const [mode,affirmed] of [["confirm-and-publish",false],["confirm-and-publish","true"],["publish-existing",true],["all",true],[null,true]]) {
+    assert.equal(validAdultPublishIntent(mode,affirmed),false);
+  }
 });
 test("server batch accepts only bounded, unique UUIDs with versions",()=>{
   assert.equal(validReviewSelection([row(1),row(2)]),true);

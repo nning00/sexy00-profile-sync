@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { createAdminClient } from "./supabase/admin";
+import type { createAdminClient } from "./supabase/admin";
 import { assertCleanupTarget, safeProfileMediaPath } from "./profile-media-gc";
 import { supabaseSchema } from "./site-instance";
 import { parseProfileDetails } from "./profile-details";
@@ -54,23 +54,54 @@ export async function saveAdultReceipt(db: Db, profileId: string, reviewer: stri
   return { id: profile.id, slug: profile.slug };
 }
 
-export async function stageAdultReceipt(db: Db, profileId: string, version: string, reviewer: string) {
+export async function confirmAndPublishAdultDraft(db: Db, profileId: string, version: string, reviewer: string) {
   const { profile, photos } = await readAdultEvidence(db,profileId,reviewer,version);
   if (profile.adult_review_status !== "pending") throw new Error("這筆資料已處理，請重新整理。");
   const saved = await db.rpc("sexy00_stage_adult_receipt", {
     p_profile_id:profile.id, p_expected_updated_at:version, p_expected_hash:profile.source_content_hash, p_photos:photos,p_reviewer:reviewer,
   });
   if (saved.error || !saved.data?.bound) throw new Error("資料或照片已變更，或不符合成年確認條件；未發布。");
+
+  // Staging advances updated_at and keeps the draft private under the hold.
+  const staged = await db.from("profiles").select("updated_at")
+    .eq("id", profile.id).eq("source_provider", "edc-public-catalog")
+    .eq("status", "draft").eq("adult_review_status", "verified").eq("adult_publish_hold", true)
+    .eq("source_content_hash", profile.source_content_hash).eq("adult_verified_by", reviewer)
+    .eq("slug", profile.slug).single();
+  if (staged.error || !staged.data?.updated_at) {
+    throw new Error("已保存成年確認，但未能核對上架狀態。請重新整理；仍待上架的資料可在「補發」區處理。");
+  }
+  const current = await readAdultEvidence(db, profileId, reviewer, staged.data.updated_at);
+  const evidenceKey = (list: typeof photos) => list.map(photo =>
+    JSON.stringify([photo.source_url,photo.storage_path,photo.sha256,photo.profile_snapshot])).sort().join("\n");
+  if (current.profile.adult_review_status !== "verified" || !current.profile.adult_publish_hold ||
+      current.profile.source_content_hash !== profile.source_content_hash || current.profile.slug !== profile.slug ||
+      evidenceKey(current.photos) !== evidenceKey(photos)) {
+    throw new Error("確認後的資料或照片已變更；未發布。請重新整理核對。");
+  }
+  return publishBoundDraft(db, current.profile, staged.data.updated_at, current.photos, reviewer);
 }
 
 export async function publishAdultDraft(db: Db, profileId: string, version: string, publisher: string) {
   const { profile, photos } = await readAdultEvidence(db,profileId,publisher,version);
   if (profile.adult_review_status !== "verified" || !profile.adult_publish_hold) throw new Error("尚未完成成年確認；未發布。");
+  return publishBoundDraft(db, profile, version, photos, publisher);
+}
+
+async function publishBoundDraft(
+  db: Db,
+  profile: Awaited<ReturnType<typeof readAdultEvidence>>["profile"],
+  version: string,
+  photos: Awaited<ReturnType<typeof readAdultEvidence>>["photos"],
+  publisher: string,
+) {
   const saved = await db.rpc("sexy00_publish_adult_draft", {
     p_profile_id:profile.id, p_expected_updated_at:version, p_expected_hash:profile.source_content_hash, p_photos:photos,p_publisher:publisher,
   });
-  if (saved.error) throw new Error("資料、照片或成年確認已變更；未發布。請重新整理後確認。");
-  return { id:profile.id,slug:profile.slug };
+  if (saved.error || typeof saved.data?.slug !== "string" || !saved.data.slug) {
+    throw new Error("未取得上架成功回覆，請重新整理核對；仍待上架的資料可在「補發」區處理。");
+  }
+  return { id:profile.id,slug:saved.data.slug };
 }
 
 export async function backfillAdultReceipts(db: Db) {
