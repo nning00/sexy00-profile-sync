@@ -1,10 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validReviewSelection,validAdultPublishIntent,reviewSelectionKey,selectedReviewRows,checkPublishedProfileUrl } from "../lib/adult-publish-selection.ts";
+import { ADULT_PUBLISH_BATCH,ADULT_REVIEW_PAGE_SIZES,adultReviewPageOptions,adultReviewPageHref,validReviewSelection,validAdultPublishIntent,reviewSelectionKey,selectedReviewRows,checkPublishedProfileUrl } from "../lib/adult-publish-selection.ts";
 import { syncAdultReview } from "../lib/adult-receipt-policy.ts";
 import { hideProfileAgeText } from "../lib/profile-details.ts";
 
 const row=(n)=>({id:`00000000-0000-4000-8000-00000000000${n}`,version:"2026-11-10T12:00:00.123456+00:00"});
+test("page size is allowlisted, defaults to 100, and uses a non-overlapping inclusive range",()=>{
+  assert.deepEqual(ADULT_REVIEW_PAGE_SIZES,[100,200,500]);
+  assert.deepEqual(adultReviewPageOptions(undefined,undefined),{pageNumber:1,pageSize:100,from:0,to:99});
+  for(const size of ADULT_REVIEW_PAGE_SIZES) {
+    assert.deepEqual(adultReviewPageOptions("2",String(size)),{pageNumber:2,pageSize:size,from:size,to:2*size-1});
+    assert.equal(adultReviewPageHref(2,size),`?page=2&size=${size}`);
+  }
+  for(const val of ["1000","500.0","-100","50",["500","200"]]) assert.equal(adultReviewPageOptions("0",val).pageSize,100);
+});
+test("selecting a 500-row page can be narrowed and does not increase write batch size",()=>{
+  const rows=Array.from({length:500},(_,i)=>({...row(0),id:`00000000-0000-4000-8000-${i.toString(16).padStart(12,"0")}`}));
+  const checked=new Set(rows.map(reviewSelectionKey));
+  checked.delete(reviewSelectionKey(rows[4]));
+  const chosen=selectedReviewRows(rows,checked);
+  assert.equal(chosen.length,499);
+  assert.ok(!chosen.includes(rows[4]));
+  assert.equal(validReviewSelection(chosen),false);
+  for(let i=0;i<chosen.length;i+=ADULT_PUBLISH_BATCH)assert.ok(validReviewSelection(chosen.slice(i,i+ADULT_PUBLISH_BATCH)));
+});
 test("manual selection is tied to the displayed row version and page",()=>{
   const list=[row(1),row(2)];
   const oldRow2={...row(2),version:"2026-11-10T11:00:00+00:00"};

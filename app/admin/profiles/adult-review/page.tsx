@@ -5,11 +5,11 @@ import { parseProfileDetails } from "@/lib/profile-details";
 import { requireAdmin } from "@/lib/supabase/require-admin";
 import PublishAdultProfiles from "./PublishAdultProfiles";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { adultReviewPageOptions } from "@/lib/adult-publish-selection";
 
-const PAGE_SIZE=30;
-export default async function AdultReviewPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
-  const { page = "1" } = await searchParams;
-  const pageNumber=/^\d{1,4}$/.test(page) ? Math.max(1,Number(page)) : 1;
+export default async function AdultReviewPage({ searchParams }: { searchParams: Promise<{ page?: string; size?: string }> }) {
+  const { page, size } = await searchParams;
+  const { pageNumber, pageSize, from, to } = adultReviewPageOptions(page, size);
   const { supabase } = await requireAdmin();
   const receiptDb=createAdminClient();
   const [receipts,boundReceipts]=await Promise.all([
@@ -23,7 +23,7 @@ export default async function AdultReviewPage({ searchParams }: { searchParams: 
     .eq("adult_review_status", "pending")
     .eq("status","draft")
     .order("source_last_seen_at", { ascending: false }).order("id")
-    .range((pageNumber-1)*PAGE_SIZE,pageNumber*PAGE_SIZE-1);
+    .range(from,to);
   const ready:{id:string;version:string;name:string;slug:string}[]=[];
   let readyError=false;
   for(let offset=0;offset<10000;offset+=200){
@@ -50,7 +50,7 @@ export default async function AdultReviewPage({ searchParams }: { searchParams: 
         return {id:profile.id, version:profile.updated_at, name:profile.display_name, content:<>
           <div className="admin-review-image">
             {profile.card_image_path
-              ? <OptimizedMediaImage src={mediaUrl(profile.card_image_path)} alt={`${profile.display_name}待確認形象照片`} fill sizes="(max-width: 720px) 100vw, 280px" />
+              ? <OptimizedMediaImage src={mediaUrl(profile.card_image_path)} alt={`${profile.display_name}待確認形象照片`} fill loading="lazy" sizes="(max-width: 720px) 100vw, 280px" />
               : <span>尚無圖片</span>}
           </div>
           <div className="admin-review-content">
@@ -75,11 +75,7 @@ export default async function AdultReviewPage({ searchParams }: { searchParams: 
     </div>
     {profileError && <div className="admin-error">無法讀取這一頁的待確認資料，請重新整理後再試。</div>}
     <div className="admin-review-notice"><strong>成年確認與資料清理</strong><p>缺少身高、體重等資料不影響發布；只有成年身分需要先確認。請勿依外貌推測，也不要填入虛構年齡。</p><p>成年確認紀錄與形象資料連動：暫時下架或封存期間保留，永久刪除形象時一併清除，不另行永久留存。人物永久刪除後若重新匯入，會重新依來源年齡或人工確認判斷，不沿用已清除的確認紀錄。</p><p>封存期間重新出現的同一筆形象，只有來源、完整資料與照片指紋吻合才可沿用確認；同名、資料或照片變更，以及證據不足時仍需重新確認。這不是證件驗證，也不會使用人臉辨識。</p><p>{receipts.error || boundReceipts.error ? "確認紀錄統計暫時無法讀取，請稍後重新整理。" : `目前記錄 ${receipts.count ?? 0} 筆人工確認，其中 ${boundReceipts.count ?? 0} 筆具備完整照片比對依據；永久刪除對應形象時會一起清除。`}</p></div>
-    <PublishAdultProfiles key={pageNumber} pending={pending} pendingError={Boolean(profileError)} ready={readyError ? null : ready} />
-    <nav className="admin-review-pagination" aria-label="待確認資料分頁">
-      {pageNumber>1 && <Link href={`?page=${pageNumber-1}`}>上一頁</Link>}
-      <span>第 {pageNumber} 頁</span>
-      {pageNumber*PAGE_SIZE<(count??0) && <Link href={`?page=${pageNumber+1}`}>下一頁</Link>}
-    </nav>
+    <PublishAdultProfiles key={`${pageNumber}:${pageSize}`} pending={pending} pendingError={Boolean(profileError)}
+      ready={readyError ? null : ready} pageNumber={pageNumber} pageSize={pageSize} total={count??0} />
   </main>;
 }
