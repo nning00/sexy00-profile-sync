@@ -22,7 +22,7 @@ function fixture({ runs = [], jobData = jobs(), state = "active", postStatus = 2
     assert.equal(new URL(url).origin, "https://api.github.com");
     assert.ok(new URL(url).pathname.startsWith("/repos/nning00/sexy00-profile-sync/actions/"));
     assert.equal(init.headers.Authorization, `Bearer ${token}`);
-    assert.equal(init.redirect, "error"); assert.ok(init.signal);
+    assert.equal(init.redirect, "manual"); assert.ok(init.signal);
     calls.push({ url, init });
     if (init.method === "POST") return new Response(null, { status: postStatus });
     if (url.includes("/jobs?")) return Response.json(jobData);
@@ -98,8 +98,8 @@ test("a delayed old-slot timer cannot dispatch a new-slot sync", async () => {
   assert.equal(f.calls.length, 0);
 });
 
-test("dispatch 401/403/429/5xx and ambiguous failures are not retried", async () => {
-  for (const postStatus of [401, 403, 429, 500]) {
+test("dispatch redirects, 401/403/429/5xx and ambiguous failures are not retried", async () => {
+  for (const postStatus of [301, 302, 303, 307, 308, 401, 403, 429, 500]) {
     const f = fixture({ postStatus });
     await assert.rejects(triggerProfileSync(controller, { SEXY00_GITHUB_ACTIONS_TOKEN: token }, f), new RegExp(String(postStatus)));
     assert.equal(f.calls.filter(c => c.init.method === "POST").length, 1);

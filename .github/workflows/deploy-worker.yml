@@ -36,7 +36,7 @@ jobs:
     needs: identity
     uses: ./.github/workflows/lifecycle72h-pr-ci.yml
   release:
-    # Same current version verified 2026-11-19; exact baseline is pinned in the adapter.
+    # Same current version verified Taiwan 2026-11-20; exact baseline is pinned in the adapter.
     needs: [identity, validate]
     runs-on: ubuntu-latest
     timeout-minutes: 20

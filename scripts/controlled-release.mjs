@@ -17,12 +17,12 @@ const tag=e.GITHUB_SHA+'-'+e.GITHUB_RUN_ID;
 await controlledRelease({
  async validate(){
   const head=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();if(head!==e.GITHUB_SHA)throw Error('CHECKOUT_SHA_MISMATCH');
-  // Independently reviewed same-version CLI verification, 2026-11-19; health passed.
-  if(e.EXPECTED_PREVIOUS_VERSION!=='338f078c-987a-458b-8eeb-3bd8f35db77d'||e.EXPECTED_PREVIOUS_DEPLOYMENT!=='5df55c88-291c-499f-acdf-5745dffb7219')throw Error('UNVERIFIED_ROLLBACK_BASELINE');
+  // Independently reviewed same-current-version CLI verification, Taiwan 2026-11-20; health passed.
+  if(e.EXPECTED_PREVIOUS_VERSION!=='1096b17e-7307-4596-a2ec-ee74efe53ab1'||e.EXPECTED_PREVIOUS_DEPLOYMENT!=='aa12bb5a-0ec1-445f-96e8-9e9fe440d468')throw Error('UNVERIFIED_ROLLBACK_BASELINE');
   const own=JSON.parse(readFileSync('package.json','utf8'));if(own.devDependencies.wrangler!=='4.92.0')throw Error('WRANGLER_VERSION_DRIFT');
   const target=JSON.parse(readFileSync(config,'utf8'));if(target.name!=='sexy00-site'||target.keep_vars!==true)throw Error('WRONG_WORKER_OR_VARIABLE_RETENTION');
   const history=await gh('actions/workflows/deploy-worker.yml/runs?per_page=100');previousReleaseGate(history.workflow_runs,e.GITHUB_RUN_ID);
-  await cron.assertEmpty();
+  await cron.assertExisting();
  },
  active,
  async assertPrevious(v){if(v!==e.EXPECTED_PREVIOUS_VERSION||baselineDeployment!==e.EXPECTED_PREVIOUS_DEPLOYMENT)throw Error('UNEXPECTED_BASELINE');const versions=JSON.parse(wr('versions','list','--json'));if(!versions.some(x=>x.id===v))throw Error('ROLLBACK_VERSION_UNAVAILABLE');wr('versions','deploy',v+'@100','--dry-run','--yes');},
@@ -33,7 +33,8 @@ await controlledRelease({
  async assertMainUnchanged(){if(baselineDeployment!==e.EXPECTED_PREVIOUS_DEPLOYMENT)throw Error('BASELINE_DEPLOYMENT_DRIFT');const main=await gh('git/ref/heads/main');if(main.object.sha!==e.GITHUB_SHA)throw Error('MAIN_MOVED');},
  async activate(id){wr('versions','deploy',id+'@100','--yes','--message','controlled '+e.GITHUB_SHA);},
  async newHealth(){await oldHealth();for(const flag of ['--photo-policy-check','--cleanup-check']){if(!process.argv.includes(flag))throw Error('READONLY_CHECK_FLAG_MISSING');execFileSync('node',['scripts/edc-profile-sync.mjs',flag],{encoding:'utf8',timeout:180000,stdio:['ignore','pipe','pipe'],env:{...process.env,PROFILE_SYNC_ENDPOINT:'https://sexy00.cc/api/profile-sync'}});}const r=await fetch('https://sexy00.cc/api/profile-sync',{headers:{Authorization:'Bearer '+e.PROFILE_SYNC_SECRET,'X-Sync-Recovery':'lifecycle72h-v1'},redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error('NEW_PREFLIGHT_HTTP_'+r.status);const j=await r.json();if(j.ok!==true||j.lifecycle72hVersion!==1||j.databaseReachable!==true||j.target?.siteUrl!=='https://sexy00.cc'||j.target?.supabaseUrl!=='https://kkxsclcqdxoiqucunpur.supabase.co')throw Error('NEW_PREFLIGHT_CAPABILITY');},
- async updateTriggers(){await cron.enable();},
+ // This repair preserves the existing timer, including during rollback. No schedule PUT.
+ async updateTriggers(){await cron.assertExisting();},
  async rollback(id){await cron.restore();wr('rollback',id,'--yes','--message','rollback failed controlled release '+e.GITHUB_SHA);}
 });
 

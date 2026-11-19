@@ -32,7 +32,7 @@
 GitHub 不再使用原生 cron；Cloudflare 及 GitHub 共用 `lib/profile-sync-cadence.mjs`，所有 dispatch 必須帶 canonical UTC `slot_start`。
 工作流程 `concurrency` 串行執行；來源不完整及清理保護維持原樣。No-op／preview 不算同步成功。
 觸發憑證 `SEXY00_GITHUB_ACTIONS_TOKEN` 只存 Cloudflare 加密 Secret，限定單一 sexy00 倉庫 Actions；2026-12-19 到期前須續期。
-受控發布在啟用候選前核對 Secret binding，健康檢查通過且同步暫停時才設定精確 sexy00 Cron；失敗先恢復原空排程再回滾。
+受控發布在啟用候選前核對 Secret binding。2026-11-20 原生 redirect 修復沿用既有精確 37 分 Cron，只讀核對、不重寫排程；回滾也保留既有時鐘，同步保持暫停直到驗收完成。
 2026-11-07 檢查時，最近的同步 run `42217295048` 的資料批次曾成功處理，但最後步驟回應 `Bad Request` 而失敗。
 本次圖片隔離不以重跑全量封存來測試，避免擴大資料變動。排程成功狀態須另行修復及驗證，不能把排程存在當成每輪成功。
 

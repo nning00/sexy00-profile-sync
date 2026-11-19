@@ -18,7 +18,7 @@ export async function triggerProfileSync(controller, env, { fetchImpl = fetch, n
   const decision = await shouldSyncSlot({ now, requestedSlot: slot, getJSON, checkActive: true });
   if (!decision.required) return { site: "sexy00.cc", status: decision.reason, ...decision };
   const response = await fetchImpl(`https://api.github.com${workflowPath}/dispatches`, {
-    method: "POST", redirect: "error", signal: AbortSignal.timeout(20000),
+    method: "POST", redirect: "manual", signal: AbortSignal.timeout(20000),
     headers: { Accept: "application/vnd.github+json", Authorization: `Bearer ${token}`, "Content-Type": "application/json",
       "User-Agent": "sexy00-sync-timer", "X-GitHub-Api-Version": "2022-11-28" },
     body: JSON.stringify({ ref: "main", inputs: { trigger_origin: "cloudflare", slot_start: slot, snapshot_check: false } }),

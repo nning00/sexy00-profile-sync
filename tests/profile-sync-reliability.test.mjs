@@ -79,7 +79,7 @@ test("schedule helper only reads GitHub and cannot send bearer tokens elsewhere"
   await assert.rejects(githubJSON("https://other.invalid/", "not-a-real-token", () => { throw new Error("must not call"); }), /Unexpected GitHub target/);
   await githubJSON("/repos/nning00/sexy00-profile-sync/actions/runs?per_page=1", "not-a-real-token", async (url, init) => {
     assert.equal(new URL(url).hostname, "api.github.com");
-    assert.equal(init.redirect, "error");
+    assert.equal(init.redirect, "manual");
     assert.equal(init.method, undefined);
     return Response.json({ workflow_runs: [] });
   });
