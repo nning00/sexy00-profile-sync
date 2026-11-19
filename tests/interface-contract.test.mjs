@@ -49,7 +49,7 @@ test("interface deployments cannot trigger catalogue writes or cleanup", () => {
   assert.doesNotMatch(deployment, /--cleanup-only|--adult-receipt-backfill/);
   assert.match(deployment, /--photo-policy-check/);
   assert.match(deployment, /--cleanup-check/);
-  assert.match(read(".github/workflows/profile-sync.yml"), /47 \* \* \* \*/);
+  assert.match(read(".github/workflows/profile-sync.yml"), /37 \* \* \* \*/);
 });
 
 test("profile return context only accepts local city directories", () => {
