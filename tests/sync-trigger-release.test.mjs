@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { cronRelease, assertTriggerSecret } from "../lib/sync-trigger-release.mjs";
 import { controlledRelease } from "../lib/release-gate.mjs";
 
-function fixture({ unknown = false, drift = false } = {}) {
-  let crons = []; let puts = 0; const calls = [];
+function fixture({ unknown = false, drift = false, initial = [] } = {}) {
+  let crons = [...initial]; let puts = 0; const calls = [];
   const io = cronRelease({ account: "f9f173ed7748397ad18c0df63220fc3f", token: "not-a-real-token",
     fetchImpl: async (url, init) => {
       assert.equal(url, "https://api.cloudflare.com/client/v4/accounts/f9f173ed7748397ad18c0df63220fc3f/workers/scripts/sexy00-site/schedules");
@@ -39,6 +39,17 @@ test("unexpected cron changes are not blindly overwritten", async () => {
 });
 test("no trigger mutation when code activation failed before trigger step", async () => {
   const f = fixture(); await f.io.restore(); assert.equal(f.calls.length, 0);
+});
+
+test("repair verifies and preserves the existing exact timer, even on rollback", async () => {
+  const f = fixture({ initial: ['37 * * * *'] });
+  await f.io.assertExisting(); await f.io.assertExisting(); await f.io.restore();
+  assert.deepEqual(f.crons, ['37 * * * *']);
+  assert.equal(f.calls.filter(c => c.method === 'PUT').length, 0);
+  for (const initial of [[], ['0 * * * *'], ['37 * * * *', '0 * * * *']]) {
+    const bad = fixture({ initial }); await assert.rejects(bad.io.assertExisting(), /EXISTING_CRON_DRIFT/);
+    await bad.io.restore(); assert.equal(bad.calls.filter(c => c.method === 'PUT').length, 0);
+  }
 });
 test("wrong account and missing token are rejected", () => {
   for (const cfg of [{ account: "a".repeat(32), token: "test" }, { account: "f9f173ed7748397ad18c0df63220fc3f", token: "" }]) {
