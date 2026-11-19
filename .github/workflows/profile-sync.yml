@@ -35,7 +35,7 @@ jobs:
         run: node scripts/profile-sync-schedule.mjs
       - name: Verify sync helper regression tests
         if: steps.cadence.outputs.sync_required == 'true'
-        run: node --test tests/profile-sync-reliability.test.mjs
+        run: node --test tests/profile-sync-reliability.test.mjs tests/profile-source-parser.test.mjs
       - name: Read-only source and receiver check
         if: steps.cadence.outputs.sync_required == 'true' && inputs.snapshot_check == true
         env:
