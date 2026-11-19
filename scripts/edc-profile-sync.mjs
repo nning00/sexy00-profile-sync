@@ -7,8 +7,8 @@ const projectRoot = resolve(import.meta.dirname, "..");
 const localEnvPaths = [join(projectRoot, ".env.sync.local"), join(projectRoot, ".env.local")];
 const sourceApi = "https://edc.com.tw/wp-json/wc/store/v1/products";
 const knownCities = new Set([
-  "�x�_", "�s�_", "��", "���", "�s��", "�]��", "�x��", "����", "�n��", "���L",
-  "�Ÿq", "�x�n", "����", "�̪F", "�y��", "�Ὤ", "�x�F", "���", "����",
+  "\u53f0\u5317", "\u65b0\u5317", "\u57fa\u9686", "\u6843\u5712", "\u65b0\u7af9", "\u82d7\u6817", "\u53f0\u4e2d", "\u5f70\u5316", "\u5357\u6295", "\u96f2\u6797",
+  "\u5609\u7fa9", "\u53f0\u5357", "\u9ad8\u96c4", "\u5c4f\u6771", "\u5b9c\u862d", "\u82b1\u84ee", "\u53f0\u6771", "\u6f8e\u6e56", "\u91d1\u9580",
 ]);
 
 function loadLocalEnv() {
@@ -46,25 +46,25 @@ function decodeHtml(value = "") {
 
 function sourceValue(value = "") {
   const normalized = decodeHtml(String(value)).trim();
-  return /^(?:\?|[-�V�X]+|n\/?a|null|undefined|unknown|����|����|����|\{[^}]+\})$/i.test(normalized) ? "" : normalized;
+  return /^(?:\?|[-\u2013\u2014]+|n\/?a|null|undefined|unknown|\u672a\u77e5|\u4e0d\u8a73|\u672a\u586b|\{[^}]+\})$/i.test(normalized) ? "" : normalized;
 }
 
 function field(text, label, nextLabels) {
-  const start = text.search(new RegExp(`${label}\\s*[�G:]\\s*`, "i"));
+  const start = text.search(new RegExp(`${label}\\s*[\uff1a:]\\s*`, "i"));
   if (start < 0) return "";
-  const remainder = text.slice(start).replace(new RegExp(`^${label}\\s*[�G:]\\s*`, "i"), "");
+  const remainder = text.slice(start).replace(new RegExp(`^${label}\\s*[\uff1a:]\\s*`, "i"), "");
   const stopPattern = nextLabels.map((item) => item.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-  const stop = stopPattern ? remainder.search(new RegExp(`\\s(?:${stopPattern})\\s*[�G:]`, "i")) : -1;
+  const stop = stopPattern ? remainder.search(new RegExp(`\\s(?:${stopPattern})\\s*[\uff1a:]`, "i")) : -1;
   return (stop >= 0 ? remainder.slice(0, stop) : remainder).trim();
 }
 
 function attribute(product, name) {
   const match = product.attributes?.find((item) => item.name === name);
-  return match?.terms?.map((term) => term.name).filter(Boolean).join("�B") || "";
+  return match?.terms?.map((term) => term.name).filter(Boolean).join("\u3001") || "";
 }
 
 function cityName(product) {
-  const fromAttribute = attribute(product, "����").split(/[�B,]/)[0]?.trim();
+  const fromAttribute = attribute(product, "\u57ce\u5e02").split(/[\u3001,]/)[0]?.trim();
   if (knownCities.has(fromAttribute)) return fromAttribute;
   return product.categories?.map((category) => category.name).find((name) => knownCities.has(name)) || "";
 }
@@ -75,34 +75,34 @@ function priceText(prices) {
   const min = prices.price_range?.min_amount || prices.price;
   const max = prices.price_range?.max_amount || prices.price;
   if (!min) return "";
-  return min === max ? `${prefix}${Number(min).toLocaleString("zh-TW")}` : `${prefix}${Number(min).toLocaleString("zh-TW")}�V${Number(max).toLocaleString("zh-TW")}`;
+  return min === max ? `${prefix}${Number(min).toLocaleString("zh-TW")}` : `${prefix}${Number(min).toLocaleString("zh-TW")}\u2013${Number(max).toLocaleString("zh-TW")}`;
 }
 
 function normalizeProduct(product) {
   const city = cityName(product);
   const text = decodeHtml(product.description || "");
-  const age = sourceValue(field(text, "�~��", ["����", "�魫", "�n�M", "����"]));
-  const serviceMethod = attribute(product, "�A�Ȥ覡") || field(text, "����", ["�a��", "�Ҧ�", "�i�t�X"]);
-  const displayName = decodeHtml(product.name || "").replace(/^.*?[-�V�X]\s*/, "").trim();
+  const age = sourceValue(field(text, "\u5e74\u9f61", ["\u8eab\u9ad8", "\u9ad4\u91cd", "\u7f69\u676f", "\u985e\u578b"]));
+  const serviceMethod = attribute(product, "\u670d\u52d9\u65b9\u5f0f") || field(text, "\u985e\u578b", ["\u5730\u5340", "\u6a21\u5f0f", "\u53ef\u914d\u5408"]);
+  const displayName = decodeHtml(product.name || "").replace(/^.*?[-\u2013\u2014]\s*/, "").trim();
   if (!product.id || !product.permalink || !displayName || !city) return null;
   return {
     sourceKey: String(product.id),
     sourceUrl: product.permalink,
     displayName,
     cityName: city,
-    nationality: sourceValue(attribute(product, "���y") || field(text, "��a", ["�~��"])),
+    nationality: sourceValue(attribute(product, "\u570b\u7c4d") || field(text, "\u570b\u5bb6", ["\u5e74\u9f61"])),
     age,
-    height: sourceValue(attribute(product, "����") || field(text, "����", ["�魫", "�n�M"])),
-    weight: sourceValue(field(text, "�魫", ["�n�M", "����"])),
-    cup: sourceValue(attribute(product, "�n�M") || field(text, "�n�M", ["����", "�a��"])),
-    environment: sourceValue(field(text, "�Ҧ�", ["�i�t�X", "������"])),
+    height: sourceValue(attribute(product, "\u8eab\u9ad8") || field(text, "\u8eab\u9ad8", ["\u9ad4\u91cd", "\u7f69\u676f"])),
+    weight: sourceValue(field(text, "\u9ad4\u91cd", ["\u7f69\u676f", "\u985e\u578b"])),
+    cup: sourceValue(attribute(product, "\u7f69\u676f") || field(text, "\u7f69\u676f", ["\u985e\u578b", "\u5730\u5340"])),
+    environment: sourceValue(field(text, "\u6a21\u5f0f", ["\u53ef\u914d\u5408", "\u4e0d\u63a5\u53d7"])),
     serviceMethod: sourceValue(serviceMethod),
     price: priceText(product.prices),
-    serviceArea: sourceValue(attribute(product, "�A�Ȧa��") || field(text, "�a��", ["�Ҧ�", "�i�t�X"])),
-    compatible: sourceValue(attribute(product, "�A�Ȥ��e") || field(text, "�i�t�X", ["������", "�[����", "�u�f���"])),
-    notAccepted: sourceValue(field(text, "������", ["�[����", "�u�f���"])),
-    surcharge: sourceValue(field(text, "�[����", ["�u�f���"])),
-    promotion: sourceValue(field(text, "�u�f���", [])),
+    serviceArea: sourceValue(attribute(product, "\u670d\u52d9\u5730\u5340") || field(text, "\u5730\u5340", ["\u6a21\u5f0f", "\u53ef\u914d\u5408"])),
+    compatible: sourceValue(attribute(product, "\u670d\u52d9\u5167\u5bb9") || field(text, "\u53ef\u914d\u5408", ["\u4e0d\u63a5\u53d7", "\u52a0\u50f9\u8cfc", "\u512a\u60e0\u65b9\u6848"])),
+    notAccepted: sourceValue(field(text, "\u4e0d\u63a5\u53d7", ["\u52a0\u50f9\u8cfc", "\u512a\u60e0\u65b9\u6848"])),
+    surcharge: sourceValue(field(text, "\u52a0\u50f9\u8cfc", ["\u512a\u60e0\u65b9\u6848"])),
+    promotion: sourceValue(field(text, "\u512a\u60e0\u65b9\u6848", [])),
     images: requireSourceImages(product.images).slice(0, 3).map((image) => ({
       url: image.thumbnail || image.src,
       alt: decodeHtml(image.alt || image.name || `${city}${serviceMethod} ${displayName}`),
@@ -152,7 +152,7 @@ async function collectProfiles(selectedCity, limit) {
       }
     }
     const collected = [...latestByCity.values()].flat().length;
-    console.log(`�ӷ��� ${page}/${totalPages}�A�w��z ${collected} ��`);
+    console.log(`\u4f86\u6e90\u9801 ${page}/${totalPages}\uff0c\u5df2\u6574\u7406 ${collected} \u7b46`);
     if (limit > 0 && collected >= limit) break;
     page += 1;
   } while (page <= totalPages);
@@ -185,8 +185,15 @@ function errorMessage(error) {
   return String(error || "unknown-error");
 }
 
-loadLocalEnv();
-if (process.env.PROFILE_SYNC_ENDPOINT) assertSyncTarget(process.env.PROFILE_SYNC_ENDPOINT);
+const sourceCheck = process.argv.includes("--source-check");
+if (sourceCheck && ["--commit", "--snapshot-check", "--cleanup-only", "--cleanup-check",
+  "--adult-receipt-check", "--adult-receipt-backfill", "--photo-policy-check", "--city", "--limit"]
+  .some(flag => process.argv.includes(flag))) {
+  throw new Error("Source check requires the complete catalogue and cannot use receiver or mutation modes");
+}
+// The source-only check never loads local credentials or calls the receiver.
+if (!sourceCheck) loadLocalEnv();
+if (!sourceCheck && process.env.PROFILE_SYNC_ENDPOINT) assertSyncTarget(process.env.PROFILE_SYNC_ENDPOINT);
 const commit = process.argv.includes("--commit");
 const snapshotCheck = process.argv.includes("--snapshot-check");
 const cleanupOnly=process.argv.includes("--cleanup-only");
@@ -229,11 +236,11 @@ async function drainMediaQueue(preview=false,maxBatches=12){
   for(let batch=0;batch<maxBatches;batch++){
     const r=await postPayload({mode:preview?"preview":"commit",profiles:[],cleanupOnly:true,queueOrphans:batch===0});
     if(!r || r.ok!==true || r.maintenanceVersion!==1)throw new Error("Expected cleanup version is not deployed; no successful cleanup can be confirmed");
-    console.log(`�Ϥ��M�z ${batch+1}�G${JSON.stringify(r)}`);
+    console.log(`\u5716\u7247\u6e05\u7406 ${batch+1}\uff1a${JSON.stringify(r)}`);
     if(preview || !r.remainingDue)return;
     await new Promise(resolve=>setTimeout(resolve,500));
   }
-  console.warn("::warning::�M�z�w�F�����W���F�Ѿl��C�|�b�U���w�����աC");
+  console.warn("::warning::\u6e05\u7406\u5df2\u9054\u672c\u8f2a\u4e0a\u9650\uff1b\u5269\u9918\u4f47\u5217\u6703\u5728\u4e0b\u6b21\u5b89\u5168\u91cd\u8a66\u3002");
 }
 if(cleanupOnly || cleanupCheck){
   if(!process.env.PROFILE_SYNC_ENDPOINT||!process.env.PROFILE_SYNC_SECRET)throw new Error("Cleanup requires configured endpoint and secret");
@@ -243,23 +250,34 @@ if(cleanupOnly || cleanupCheck){
 if (commit && (!process.env.PROFILE_SYNC_ENDPOINT || !process.env.PROFILE_SYNC_SECRET)) throw new Error("Commit requires endpoint and secret; no sync was performed");
 const selectedCity = argValue("--city") || "";
 const limit = Math.max(Number(argValue("--limit") || "0"), 0);
-if (selectedCity && !knownCities.has(selectedCity)) throw new Error(`���䴩�������G${selectedCity}`);
+if (selectedCity && !knownCities.has(selectedCity)) throw new Error(`\u4e0d\u652f\u63f4\u7684\u57ce\u5e02\uff1a${selectedCity}`);
 
 const capturedAt = new Date().toISOString();
 const profiles = await collectProfiles(selectedCity, limit);
 const syncableProfiles = profiles.filter(isVerifiedAdult);
 const pendingReviewProfiles = profiles.filter((profile) => !isVerifiedAdult(profile));
+if (sourceCheck) {
+  const cities = Object.fromEntries([...knownCities].map(city =>
+    [city, profiles.filter(profile => profile.cityName === city).length]).filter(([, count]) => count > 0));
+  console.log(JSON.stringify({
+    site: "sexy00.cc", mode: "source-check", readOnly: true,
+    sourceCount: profiles.length, sourcePages: Math.ceil(profiles.length / 100),
+    verifiedAdultFromSource: syncableProfiles.length, pendingAdultFromSource: pendingReviewProfiles.length,
+    cities, receiverRequests: 0,
+  }));
+  process.exit(0);
+}
 const outputPath = join(projectRoot, "outputs", `edc-sync-${capturedAt.replace(/[:.]/g, "-")}.json`);
 mkdirSync(dirname(outputPath), { recursive: true });
 writeFileSync(outputPath, JSON.stringify({ capturedAt, candidateCount: profiles.length, verifiedAdultCount: syncableProfiles.length, pendingAdultReviewCount: pendingReviewProfiles.length, profiles }, null, 2));
-console.log(`�w����ơG${outputPath}`);
-console.log(`�Կ� ${profiles.length} ���F�i�T�{���~ ${syncableProfiles.length} ���F�ݫ�x�T�{���~ ${pendingReviewProfiles.length} ���F${[...new Set(profiles.map((profile) => profile.cityName))].length} �ӫ���`);
+console.log(`\u9810\u89bd\u8cc7\u6599\uff1a${outputPath}`);
+console.log(`\u5019\u9078 ${profiles.length} \u7b46\uff1b\u53ef\u78ba\u8a8d\u6210\u5e74 ${syncableProfiles.length} \u7b46\uff1b\u5f85\u5f8c\u53f0\u78ba\u8a8d\u6210\u5e74 ${pendingReviewProfiles.length} \u7b46\uff1b${[...new Set(profiles.map((profile) => profile.cityName))].length} \u500b\u57ce\u5e02`);
 
 if (snapshotCheck) {
   if (!process.env.PROFILE_SYNC_ENDPOINT || !process.env.PROFILE_SYNC_SECRET) throw new Error("Snapshot check requires endpoint and secret");
   if (selectedCity || limit) throw new Error("Snapshot check requires the complete source catalogue");
   const response = await postPayload({ mode: "preview", capturedAt, profiles: [], finalizeSnapshot: true, snapshotSourceKeys: profiles.map((profile) => profile.sourceKey),sourceTotal:profiles.length,sourcePages:Math.ceil(profiles.length/100) });
-  console.log(`��Ū�����ˬd�]���ק�����ơ^�G${JSON.stringify(response)}`);
+  console.log(`\u552f\u8b80\u6536\u5c3e\u6aa2\u67e5\uff08\u672a\u4fee\u6539\u4efb\u4f55\u8cc7\u6599\uff09\uff1a${JSON.stringify(response)}`);
 } else if (process.env.PROFILE_SYNC_ENDPOINT && process.env.PROFILE_SYNC_SECRET) {
   const chunks = [];
   // Keep each request small because a batch also downloads several remote images.
@@ -278,16 +296,16 @@ if (snapshotCheck) {
         const attemptErrors = response?.result?.errors || [];
         const blockingErrors = attemptErrors.filter((item) => item?.message !== "image-download-404");
         if (!blockingErrors.length) break;
-        console.error(`�妸 ${index + 1}/${chunks.length} �� ${attempt} �����ե��ѡG${JSON.stringify(blockingErrors)}`);
+        console.error(`\u6279\u6b21 ${index + 1}/${chunks.length} \u7b2c ${attempt} \u6b21\u5617\u8a66\u5931\u6557\uff1a${JSON.stringify(blockingErrors)}`);
       } catch (error) {
         terminalHttpError = errorMessage(error);
-        console.error(`�妸 ${index + 1}/${chunks.length} �� ${attempt} �� HTTP ���ե��ѡG${terminalHttpError}`);
+        console.error(`\u6279\u6b21 ${index + 1}/${chunks.length} \u7b2c ${attempt} \u6b21 HTTP \u5617\u8a66\u5931\u6557\uff1a${terminalHttpError}`);
       }
       if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 5000));
     }
     if (!response) {
       totals.errors += chunk.length;
-      console.error(`�妸 ${index + 1}/${chunks.length} �w���L���~������ơG${terminalHttpError}`);
+      console.error(`\u6279\u6b21 ${index + 1}/${chunks.length} \u5df2\u7565\u904e\u4e26\u7e7c\u7e8c\u5f8c\u7e8c\u8cc7\u6599\uff1a${terminalHttpError}`);
       await new Promise((resolve) => setTimeout(resolve, 1000));
       continue;
     }
@@ -298,27 +316,25 @@ if (snapshotCheck) {
     const blockingErrors = responseErrors.filter((item) => item?.message !== "image-download-404");
     totals.warnings += warningErrors.length;
     totals.errors += blockingErrors.length;
-    console.log(`�妸 ${index + 1}/${chunks.length}�G${JSON.stringify(response?.summary || response)}`);
+    console.log(`\u6279\u6b21 ${index + 1}/${chunks.length}\uff1a${JSON.stringify(response?.summary || response)}`);
     if (warningErrors.length) {
-      console.warn(`�妸ĵ�i�]�ӷ��Ϥ����s�b�A�w���L�^�G${JSON.stringify(warningErrors)}`);
+      console.warn(`\u6279\u6b21\u8b66\u544a\uff08\u4f86\u6e90\u5716\u7247\u4e0d\u5b58\u5728\uff0c\u5df2\u8df3\u904e\uff09\uff1a${JSON.stringify(warningErrors)}`);
     }
     if (blockingErrors.length) {
-      console.error(`�妸���~�G${JSON.stringify(blockingErrors)}`);
+      console.error(`\u6279\u6b21\u932f\u8aa4\uff1a${JSON.stringify(blockingErrors)}`);
     }
     await new Promise((resolve) => setTimeout(resolve, 350));
   }
   if (commit && !selectedCity && limit === 0 && totals.errors === 0) {
     const finalization = await postPayload({ mode: "commit", capturedAt, profiles: [], finalizeSnapshot: true, snapshotSourceKeys: profiles.map((profile) => profile.sourceKey),sourceTotal:profiles.length,sourcePages:Math.ceil(profiles.length/100) });
-    console.log(`�P�B�����G${JSON.stringify(finalization)}`);
+    console.log(`\u540c\u6b65\u6536\u5c3e\uff1a${JSON.stringify(finalization)}`);
     if (finalization?.snapshot?.status === "blocked") {
-      console.warn("::warning::��Ƥw�P�B�A���ӷ����ƤU��Ĳ�o�O�@�A���ʦs�J����ơC���ˬd�����K�n�A���N���ӷ��w���Ƥǰt�C");
+      console.warn("::warning::\u8cc7\u6599\u5df2\u540c\u6b65\uff0c\u4f46\u4f86\u6e90\u7b46\u6578\u4e0b\u964d\u89f8\u767c\u4fdd\u8b77\uff0c\u672a\u5c01\u5b58\u65e2\u6709\u8cc7\u6599\u3002\u8acb\u6aa2\u67e5\u6536\u5c3e\u6458\u8981\uff0c\u4e0d\u4ee3\u8868\u4f86\u6e90\u5df2\u5168\u6578\u5339\u914d\u3002");
     }
     // Automatic synchronization never permanently purges queued media.
   }
   console.log(JSON.stringify(totals, null, 2));
-  if (totals.errors) throw new Error(`�P�B�������� ${totals.errors} �����~�F�w�O�d�J����ƨò��L�ʦs�A�U���Ƶ{�|���աC`);
+  if (totals.errors) throw new Error(`\u540c\u6b65\u5b8c\u6210\u4f46\u6709 ${totals.errors} \u7b46\u932f\u8aa4\uff1b\u5df2\u4fdd\u7559\u65e2\u6709\u8cc7\u6599\u4e26\u7565\u904e\u5c01\u5b58\uff0c\u4e0b\u6b21\u6392\u7a0b\u6703\u91cd\u8a66\u3002`);
 } else {
-  console.log("�|���]�w PROFILE_SYNC_ENDPOINT / PROFILE_SYNC_SECRET�A�]���u�إߥ����w���A���|�ק勵�������C ");
+  console.log("\u5c1a\u672a\u8a2d\u5b9a PROFILE_SYNC_ENDPOINT / PROFILE_SYNC_SECRET\uff0c\u56e0\u6b64\u53ea\u5efa\u7acb\u672c\u6a5f\u9810\u89bd\uff0c\u4e0d\u6703\u4fee\u6539\u6b63\u5f0f\u7db2\u7ad9\u3002 ");
 }
-
-

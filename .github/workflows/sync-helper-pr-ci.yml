@@ -39,4 +39,4 @@ jobs:
             --bounding-set=-all --no-new-privs \
             env -i \
             PATH="$node_dir:/usr/bin:/bin" \
-            "$node_bin" --test tests/profile-sync-reliability.test.mjs
+            "$node_bin" --test tests/profile-sync-reliability.test.mjs tests/profile-source-parser.test.mjs
