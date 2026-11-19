@@ -3,7 +3,7 @@ name: Sync public profiles to sexy00.cc
 on:
   schedule:
     # Lightweight catch-up check; actual catalogue sync runs once per six-hour slot.
-    - cron: "47 * * * *"
+    - cron: "37 * * * *"
   workflow_dispatch:
     inputs:
       snapshot_check:
