@@ -7,7 +7,7 @@ import { githubJSON, shouldSyncSlot, sixHourSlot } from "../scripts/profile-sync
 const source = "https://edc.com.tw/wp-json/wc/store/v1/products?per_page=100&page=1";
 const now = "2026-11-08T11:00:00Z";
 const run = (id, overrides = {}) => ({ id, event: "schedule", head_branch: "main", path: ".github/workflows/profile-sync.yml",
-  status: "completed", conclusion: "success", run_started_at: "2026-11-08T10:47:00Z", ...overrides });
+  status: "completed", conclusion: "success", run_started_at: "2026-11-08T10:47:00Z", updated_at: "2026-11-08T10:55:00Z", ...overrides });
 const jobs = (name, conclusion = "success") => ({ total_count: 1, jobs: [{ conclusion: "success", steps: [{ name, conclusion }] }] });
 
 test("six-hour slot preserves the original Taiwan 00:30/06:30/12:30/18:30 windows", () => {
@@ -21,7 +21,8 @@ test("six-hour slot preserves the original Taiwan 00:30/06:30/12:30/18:30 window
 
 test("missing/failed previous sync requires catch-up", async () => {
   for (const workflow_runs of [[], [run(1, { conclusion: "failure" })], [run(1, { run_started_at: "2026-11-08T04:47:00Z" })]]) {
-    const r = await shouldSyncSlot({ now, currentRunId: 5, getJSON: async () => ({ workflow_runs }) });
+    const r = await shouldSyncSlot({ now, currentRunId: 5, getJSON: async endpoint => endpoint.includes("/jobs?")
+      ? jobs("Commit profile catalogue (six-hour slot)", "failure") : { workflow_runs } });
     assert.equal(r.required, true);
   }
 });
@@ -57,9 +58,9 @@ test("known legacy automatic commit is recognized", async () => {
   assert.equal(r.required, false);
 });
 
-test("current run, manual preview, other workflow/branch and future runs are excluded", async () => {
-  const workflow_runs = [run(5), run(1, { event: "workflow_dispatch" }), run(2, { head_branch: "other" }),
-    run(3, { path: ".github/workflows/deploy-worker.yml" }), run(4, { run_started_at: "2026-11-08T12:00:00Z" })];
+test("current run, unrelated event, other workflow/branch and future runs are excluded", async () => {
+  const workflow_runs = [run(5), run(1, { event: "pull_request" }), run(2, { head_branch: "other" }),
+    run(3, { path: ".github/workflows/deploy-worker.yml" })];
   const r = await shouldSyncSlot({ now, currentRunId: 5, getJSON: async endpoint => {
     assert.ok(!endpoint.includes("/jobs?")); return { workflow_runs };
   } });

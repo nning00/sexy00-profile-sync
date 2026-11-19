@@ -36,7 +36,7 @@ jobs:
     needs: identity
     uses: ./.github/workflows/lifecycle72h-pr-ci.yml
   release:
-    # Official same-version rollback verified in run 43374515895; sync stays disabled.
+    # Same current version verified 2026-11-19; exact baseline is pinned in the adapter.
     needs: [identity, validate]
     runs-on: ubuntu-latest
     timeout-minutes: 20

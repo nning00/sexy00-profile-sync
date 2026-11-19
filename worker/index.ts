@@ -1,5 +1,6 @@
 import handler from "vinext/server/fetch-handler";
 import { withRequestPerformance } from "../lib/request-performance";
+import { triggerProfileSync } from "./profile-sync-trigger.mjs";
 
 const PUBLIC_HTML_CACHE_CONTROL = "public, max-age=0, s-maxage=300, stale-while-revalidate=600";
 const CANONICAL_HOST = "sexy00.cc";
@@ -26,6 +27,14 @@ function withPublicHeaders(response: Response, request: Request) {
 }
 
 const worker = {
+  async scheduled(controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
+    ctx.waitUntil(triggerProfileSync(controller, env).then(result => {
+      console.log(JSON.stringify(result));
+    }).catch(() => {
+      console.error(JSON.stringify({ site: "sexy00.cc", status: "trigger-failed" }));
+      throw new Error("sexy00 scheduled trigger failed; no direct data writes");
+    }));
+  },
   async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext) {
     const requestUrl = new URL(request.url);
     if (requestUrl.hostname === "www.sexy00.cc" || (requestUrl.hostname === CANONICAL_HOST && requestUrl.protocol !== "https:")) {

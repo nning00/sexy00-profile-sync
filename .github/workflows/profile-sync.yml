@@ -1,11 +1,18 @@
 name: Sync public profiles to sexy00.cc
+run-name: "sexy00 sync | slot=${{ inputs.slot_start || 'current' }} | ${{ inputs.trigger_origin || github.event_name }}"
 
 on:
-  schedule:
-    # Lightweight catch-up check; actual catalogue sync runs once per six-hour slot.
-    - cron: "37 * * * *"
   workflow_dispatch:
     inputs:
+      trigger_origin:
+        description: "Trigger provenance (all origins use the six-hour guard)"
+        type: choice
+        options: [manual, cloudflare]
+        default: manual
+      slot_start:
+        description: "Cloudflare six-hour slot, canonical UTC ISO timestamp"
+        required: true
+        type: string
       snapshot_check:
         description: "Read-only source and finalization check (no profile changes)"
         type: boolean
@@ -32,10 +39,12 @@ jobs:
         id: cadence
         env:
           GH_TOKEN: ${{ github.token }}
+          SYNC_TRIGGER_ORIGIN: ${{ inputs.trigger_origin }}
+          SYNC_REQUESTED_SLOT: ${{ inputs.slot_start }}
         run: node scripts/profile-sync-schedule.mjs
       - name: Verify sync helper regression tests
         if: steps.cadence.outputs.sync_required == 'true'
-        run: node --test tests/profile-sync-reliability.test.mjs tests/profile-source-parser.test.mjs
+        run: node --test tests/profile-sync-reliability.test.mjs tests/profile-source-parser.test.mjs tests/profile-sync-trigger.test.mjs
       - name: Read-only source and receiver check
         if: steps.cadence.outputs.sync_required == 'true' && inputs.snapshot_check == true
         env:
