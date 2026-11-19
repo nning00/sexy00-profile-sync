@@ -62,3 +62,16 @@ test("Cron enable is part of the controlled transaction, and failure restores ba
   assert.equal(active, "old"); assert.ok(events.indexOf("health") < events.indexOf("cron"));
   assert.ok(!events.includes("healthy")); assert.ok(events.includes("restore-cron-before-code"));
 });
+
+test("sync-state drift is rechecked before activation and immediately before Cron enable", async () => {
+  for (const failAt of [2, 3]) {
+    let active = "old", checks = 0, cronCalled = false;
+    const io = { validate: async () => {}, active: async () => active, assertPrevious: async () => {},
+      assertSyncDisabled: async () => { if (++checks === failAt) throw Error("SYNC_NOT_DISABLED"); },
+      oldHealth: async () => {}, persist: async () => {}, upload: async () => "new", assertMainUnchanged: async () => {},
+      activate: async v => { active = v; }, newHealth: async () => {}, updateTriggers: async () => { cronCalled = true; },
+      rollback: async v => { active = v; } };
+    await assert.rejects(controlledRelease(io));
+    assert.equal(active, "old"); assert.equal(cronCalled, false); assert.equal(checks, failAt);
+  }
+});
