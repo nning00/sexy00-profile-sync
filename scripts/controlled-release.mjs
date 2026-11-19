@@ -1,11 +1,13 @@
 // Real adapter for GitHub Actions only. Never run this for local validation.
 import {execFileSync} from 'node:child_process';import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {controlledRelease,releaseIdentity,previousReleaseGate,soleVersion} from '../lib/release-gate.mjs';
+import {cronRelease,assertTriggerSecret} from '../lib/sync-trigger-release.mjs';
 const e=process.env;const repo='nning00/sexy00-profile-sync',config='wrangler.jsonc';
 releaseIdentity({event:e.GITHUB_EVENT_NAME,ref:e.GITHUB_REF,sha:e.GITHUB_SHA,expectedSha:e.EXPECTED_SHA,runAttempt:e.GITHUB_RUN_ATTEMPT});
 if(e.GITHUB_ACTIONS!=='true'||e.GITHUB_REPOSITORY!==repo||!/^[a-f0-9]{32}$/.test(e.CLOUDFLARE_ACCOUNT_ID||''))throw Error('WRONG_RELEASE_TARGET');
 for(const k of ['GH_TOKEN','CLOUDFLARE_API_TOKEN','PROFILE_SYNC_SECRET','EXPECTED_PREVIOUS_VERSION','EXPECTED_PREVIOUS_DEPLOYMENT'])if(!e[k])throw Error('MISSING_'+k);
 const evidence=[];mkdirSync('release-evidence',{recursive:true});
+const cron=cronRelease({account:e.CLOUDFLARE_ACCOUNT_ID,token:e.CLOUDFLARE_API_TOKEN});
 const wr=(...args)=>execFileSync('pnpm',['exec','wrangler',...args,'--config',config],{encoding:'utf8',timeout:180000,stdio:['ignore','pipe','pipe']}).trim();
 async function gh(path){const r=await fetch('https://api.github.com/repos/'+repo+'/'+path,{headers:{Authorization:'Bearer '+e.GH_TOKEN,Accept:'application/vnd.github+json'},redirect:'error',signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error('GITHUB_READ_FAILED_'+r.status);return await r.json();}
 let baselineDeployment;
@@ -15,20 +17,23 @@ const tag=e.GITHUB_SHA+'-'+e.GITHUB_RUN_ID;
 await controlledRelease({
  async validate(){
   const head=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();if(head!==e.GITHUB_SHA)throw Error('CHECKOUT_SHA_MISMATCH');
-  if(e.EXPECTED_PREVIOUS_VERSION!=='3f6a3050-b987-4a74-8f12-42fd5bea500f'||e.EXPECTED_PREVIOUS_DEPLOYMENT!=='85b5ec29-2c24-462d-bc05-3ce3f2371c35')throw Error('UNVERIFIED_ROLLBACK_BASELINE');
+  // Independently reviewed same-version CLI verification, 2026-11-19; health passed.
+  if(e.EXPECTED_PREVIOUS_VERSION!=='338f078c-987a-458b-8eeb-3bd8f35db77d'||e.EXPECTED_PREVIOUS_DEPLOYMENT!=='5df55c88-291c-499f-acdf-5745dffb7219')throw Error('UNVERIFIED_ROLLBACK_BASELINE');
   const own=JSON.parse(readFileSync('package.json','utf8'));if(own.devDependencies.wrangler!=='4.92.0')throw Error('WRANGLER_VERSION_DRIFT');
   const target=JSON.parse(readFileSync(config,'utf8'));if(target.name!=='sexy00-site'||target.keep_vars!==true)throw Error('WRONG_WORKER_OR_VARIABLE_RETENTION');
   const history=await gh('actions/workflows/deploy-worker.yml/runs?per_page=100');previousReleaseGate(history.workflow_runs,e.GITHUB_RUN_ID);
+  await cron.assertEmpty();
  },
  active,
  async assertPrevious(v){if(v!==e.EXPECTED_PREVIOUS_VERSION||baselineDeployment!==e.EXPECTED_PREVIOUS_DEPLOYMENT)throw Error('UNEXPECTED_BASELINE');const versions=JSON.parse(wr('versions','list','--json'));if(!versions.some(x=>x.id===v))throw Error('ROLLBACK_VERSION_UNAVAILABLE');wr('versions','deploy',v+'@100','--dry-run','--yes');},
  async assertSyncDisabled(){const w=await gh('actions/workflows/profile-sync.yml');if(w.state!=='disabled_manually')throw Error('SYNC_NOT_DISABLED');const runs=await gh('actions/workflows/profile-sync.yml/runs?per_page=100');if(runs.workflow_runs.some(x=>['queued','in_progress','waiting','pending','requested'].includes(x.status)))throw Error('SYNC_RUN_ACTIVE');},
  oldHealth,
  async persist(v){evidence.push({...v,at:new Date().toISOString(),sha:e.GITHUB_SHA});writeFileSync('release-evidence/state.json',JSON.stringify(evidence,null,2));},
- async upload(){wr('versions','upload','--tag',tag,'--message','controlled lifecycle72h '+e.GITHUB_SHA,'--keep-vars');const v=JSON.parse(wr('versions','list','--json')).filter(x=>x.annotations?.['workers/tag']===tag);if(v.length!==1)throw Error('UPLOAD_ID_NOT_UNIQUE');return v[0].id;},
+ async upload(){wr('versions','upload','--tag',tag,'--message','controlled Cloudflare sync timer '+e.GITHUB_SHA,'--keep-vars');const v=JSON.parse(wr('versions','list','--json')).filter(x=>x.annotations?.['workers/tag']===tag);if(v.length!==1)throw Error('UPLOAD_ID_NOT_UNIQUE');assertTriggerSecret(JSON.parse(wr('versions','view',v[0].id,'--json')));return v[0].id;},
  async assertMainUnchanged(){if(baselineDeployment!==e.EXPECTED_PREVIOUS_DEPLOYMENT)throw Error('BASELINE_DEPLOYMENT_DRIFT');const main=await gh('git/ref/heads/main');if(main.object.sha!==e.GITHUB_SHA)throw Error('MAIN_MOVED');},
  async activate(id){wr('versions','deploy',id+'@100','--yes','--message','controlled '+e.GITHUB_SHA);},
  async newHealth(){await oldHealth();for(const flag of ['--photo-policy-check','--cleanup-check']){if(!process.argv.includes(flag))throw Error('READONLY_CHECK_FLAG_MISSING');execFileSync('node',['scripts/edc-profile-sync.mjs',flag],{encoding:'utf8',timeout:180000,stdio:['ignore','pipe','pipe'],env:{...process.env,PROFILE_SYNC_ENDPOINT:'https://sexy00.cc/api/profile-sync'}});}const r=await fetch('https://sexy00.cc/api/profile-sync',{headers:{Authorization:'Bearer '+e.PROFILE_SYNC_SECRET,'X-Sync-Recovery':'lifecycle72h-v1'},redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000)});if(!r.ok)throw Error('NEW_PREFLIGHT_HTTP_'+r.status);const j=await r.json();if(j.ok!==true||j.lifecycle72hVersion!==1||j.databaseReachable!==true||j.target?.siteUrl!=='https://sexy00.cc'||j.target?.supabaseUrl!=='https://kkxsclcqdxoiqucunpur.supabase.co')throw Error('NEW_PREFLIGHT_CAPABILITY');},
- async rollback(id){wr('rollback',id,'--yes','--message','rollback failed controlled release '+e.GITHUB_SHA);}
+ async updateTriggers(){await cron.enable();},
+ async rollback(id){await cron.restore();wr('rollback',id,'--yes','--message','rollback failed controlled release '+e.GITHUB_SHA);}
 });
 

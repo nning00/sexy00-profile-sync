@@ -49,7 +49,8 @@ test("interface deployments cannot trigger catalogue writes or cleanup", () => {
   assert.doesNotMatch(deployment, /--cleanup-only|--adult-receipt-backfill/);
   assert.match(deployment, /--photo-policy-check/);
   assert.match(deployment, /--cleanup-check/);
-  assert.match(read(".github/workflows/profile-sync.yml"), /37 \* \* \* \*/);
+  assert.doesNotMatch(read(".github/workflows/profile-sync.yml"), /\n  schedule:/);
+  assert.match(read("wrangler.jsonc"), /37 \* \* \* \*/);
 });
 
 test("profile return context only accepts local city directories", () => {

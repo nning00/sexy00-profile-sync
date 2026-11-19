@@ -27,7 +27,12 @@
 
 ## 外部排程檢查
 
-同步排程在 `.github/workflows/profile-sync.yml`，設定為每六小時一次；不是 Cloudflare Cron。
+同步由 `sexy00-site` 的 Cloudflare Cron 每小時第 37 分喚醒，GitHub `.github/workflows/profile-sync.yml` 執行工作。
+台灣 00:30／06:30／12:30／18:30 為六小時區間；同區間已有正式 Commit 步驟成功就跳過，失敗由後續時鐘補跑。
+GitHub 不再使用原生 cron；Cloudflare 及 GitHub 共用 `lib/profile-sync-cadence.mjs`，所有 dispatch 必須帶 canonical UTC `slot_start`。
+工作流程 `concurrency` 串行執行；來源不完整及清理保護維持原樣。No-op／preview 不算同步成功。
+觸發憑證 `SEXY00_GITHUB_ACTIONS_TOKEN` 只存 Cloudflare 加密 Secret，限定單一 sexy00 倉庫 Actions；2026-12-19 到期前須續期。
+受控發布在啟用候選前核對 Secret binding，健康檢查通過且同步暫停時才設定精確 sexy00 Cron；失敗先恢復原空排程再回滾。
 2026-11-07 檢查時，最近的同步 run `42217295048` 的資料批次曾成功處理，但最後步驟回應 `Bad Request` 而失敗。
 本次圖片隔離不以重跑全量封存來測試，避免擴大資料變動。排程成功狀態須另行修復及驗證，不能把排程存在當成每輪成功。
 
