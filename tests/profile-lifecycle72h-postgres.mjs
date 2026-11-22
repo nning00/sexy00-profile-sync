@@ -106,4 +106,3 @@ console.log(rollback);
 console.log("select pg_temp.check(position('purge_ids' in pg_get_functiondef('public.sexy00_complete_profile_snapshot(text[],timestamptz,integer,integer)'::regprocedure))>0,'rollback definition compiles');");
 console.log(sql);
 console.log("select pg_temp.check(position('72h-confirmation-v1' in pg_get_functiondef('public.sexy00_complete_profile_snapshot(text[],timestamptz,integer,integer)'::regprocedure))>0,'candidate reapplies after rollback'); rollback;");
-

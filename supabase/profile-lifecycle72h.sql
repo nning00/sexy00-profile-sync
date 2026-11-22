@@ -90,4 +90,3 @@ begin
   insert into public.profile_sync_runs(provider,mode,status,summary,completed_at) values('edc-public-catalog','snapshot','success',result,now());
   return result;
 end; $function$;
-
