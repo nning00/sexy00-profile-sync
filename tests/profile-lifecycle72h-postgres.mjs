@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 const candidate=fs.readFileSync('supabase/profile-lifecycle72h.sql','utf8');
 assert(!/delete\s+from/i.test(candidate),'scheduled finalizer must never delete');
 assert(!/insert into public\.profile_media_gc/i.test(candidate),'no media deletion queue');
+assert(candidate.includes("l.missed_snapshots>=3 and l.first_missing_at<=p_captured_at-interval '12 hours'"),'archive requires both three complete absences and twelve hours');
 const baseline=fs.readFileSync('supabase/profile-lifecycle72h.rollback.sql','utf8');
 assert(!/delete\s+from/i.test(baseline),'safe fallback must not restore purge');
 const hashes=['a3cf82662fce2750331bd3faeeb2b31e08d8bd39662997ff1fa7fe9f66d40f17','f671132dc61ee10c96da33fa19c3cb45aac44722c12225f351f39d2960824a91','acaf55107ff512d127036e4e46a02fa388b0dcde59b7808e73dd68157b94dc9c'];
@@ -39,11 +40,28 @@ insert into profiles(id,source_provider,source_key,status,source_last_seen_at) v
  ('ffffffff-0000-0000-0000-000000000002','edc-public-catalog','2','published',now()-interval '1 day'),
  ('00000000-0000-0000-0000-000000000001','edc-public-catalog','3','archived',now()-interval '5 days');
 select sexy00_complete_profile_snapshot(array['1'],now()-interval '1 hour',1,1);
-select pg_temp.check((select status='archived' from profiles where source_key='2'),'first complete absence hides immediately');
+select pg_temp.check((select status='published' from profiles where source_key='2'),'first complete absence preserves publication');
 select pg_temp.check((select (summary->>'deleted')::int=0 and (summary->>'pendingDeletionConfirmation')::int=0 from profile_sync_runs order by id desc limit 1),'first absence never deletes or queues');
 select pg_temp.check((select count(*)=3 from profiles),'all original rows retained');
 select pg_temp.check((sexy00_complete_profile_snapshot(array['1'],now()-interval '1 hour',1,1)->>'status')='duplicate','duplicate snapshot no progress');
 select pg_temp.check((select missed_snapshots=1 from profile_sync_lifecycle where profile_id='ffffffff-0000-0000-0000-000000000002'),'duplicate does not age lifecycle');
+update profile_sync_lifecycle set first_missing_at=now()-interval '13 hours' where profile_id='ffffffff-0000-0000-0000-000000000002';
+select sexy00_complete_profile_snapshot(array['1'],now()-interval '59 minutes',1,1);
+select pg_temp.check((select status='published' from profiles where source_key='2'),'second absence after twelve hours still preserves publication');
+select pg_temp.check((select missed_snapshots=2 from profile_sync_lifecycle where profile_id='ffffffff-0000-0000-0000-000000000002'),'second complete snapshot increments once');
+savepoint two_absences;
+update profile_sync_lifecycle set first_missing_at=now()-interval '58 minutes'-interval '12 hours'+interval '1 millisecond' where profile_id='ffffffff-0000-0000-0000-000000000002';
+select sexy00_complete_profile_snapshot(array['1'],now()-interval '58 minutes',1,1);
+select pg_temp.check((select status='published' from profiles where source_key='2'),'third absence at twelve hours minus one millisecond stays published');
+rollback to two_absences;
+update profile_sync_lifecycle set first_missing_at=now()-interval '58 minutes'-interval '12 hours' where profile_id='ffffffff-0000-0000-0000-000000000002';
+select sexy00_complete_profile_snapshot(array['1'],now()-interval '58 minutes',1,1);
+select pg_temp.check((select status='archived' from profiles where source_key='2'),'third absence at exactly twelve hours archives');
+select pg_temp.check((select missed_snapshots=3 and archived_by_cleanup from profile_sync_lifecycle where profile_id='ffffffff-0000-0000-0000-000000000002'),'third absence is tagged without deleting');
+select pg_temp.check((select count(*)=3 from profiles),'archival retains every profile');
+update profile_sync_lifecycle set first_missing_at=now()-interval '45 minutes'-interval '72 hours'+interval '1 millisecond' where profile_id='ffffffff-0000-0000-0000-000000000002';
+select sexy00_complete_profile_snapshot(array['1'],now()-interval '45 minutes',1,1);
+select pg_temp.check((select (summary->>'pendingDeletionConfirmation')::int=0 from profile_sync_runs order by id desc limit 1),'seventy-two hours minus one millisecond never nominates deletion');
 update profile_sync_lifecycle set first_missing_at=now()-interval '73 hours',archived_at=now()-interval '73 hours',archived_by_cleanup=true;
 select sexy00_complete_profile_snapshot(array['1'],now()-interval '30 minutes',1,1);
 select pg_temp.check((select (summary->>'pendingDeletionConfirmation')::int=1 from profile_sync_runs order by id desc limit 1),'72h newer successful snapshot queues unprotected only');
@@ -52,7 +70,7 @@ select pg_temp.check((select count(*)=0 from profile_media_gc),'no media deletio
 do $b$ begin
  begin perform sexy00_complete_profile_snapshot(array['1'],now(),2,1); raise exception 'should reject'; exception when others then if sqlerrm='should reject' then raise; end if; end;
 end; $b$;
-select pg_temp.check((select count(*)=2 from profile_sync_runs),'invalid total does not advance snapshot');
+select pg_temp.check((select count(*)=5 from profile_sync_runs),'invalid total does not advance snapshot');
 
 -- Exclusions require a successful same-capture receipt from the importer.
 insert into profile_sync_runs(provider,mode,status,summary,completed_at) values

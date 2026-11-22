@@ -71,7 +71,7 @@ begin
     update public.profiles p set status='archived' from public.profile_sync_lifecycle l
     where p.id=l.profile_id and p.source_provider='edc-public-catalog' and p.status<>'archived'
       and not(p.source_key=any(p_keys)) and coalesce(p.source_last_seen_at,'-infinity'::timestamptz)<=p_captured_at
-      and l.missed_snapshots>=1 returning p.id
+      and l.missed_snapshots>=3 and l.first_missing_at<=p_captured_at-interval '12 hours' returning p.id
   ), tagged as (
     update public.profile_sync_lifecycle l set archived_at=now(),archived_by_cleanup=true from archived a where l.profile_id=a.id returning l.profile_id
   ) select count(*) into archived_count from tagged;
