@@ -2,8 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {cityPageNumber,cityPageHref,cityPageLinks,isCityPageOutOfRange} from '../lib/city-pagination.ts';
-import {profileReturnPath,savedProfileReturn} from '../lib/navigation.ts';
+import {profileReturnPath,savedProfileReturn,profileCityReturnPath} from '../lib/navigation.ts';
 const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
+test('direct entry and disabled session storage retain a stable public city default',()=>{
+ const regions=[{slug:'north',cities:[{id:'hidden',slug:'secret',published:false},{id:'public',slug:'taipei',published:true}]}];
+ assert.equal(profileCityReturnPath(regions,['public']),'/regions/north/taipei');
+ assert.equal(profileCityReturnPath(regions,['hidden']),'/#gallery');
+ assert.equal(profileCityReturnPath(regions,[]),'/#gallery');
+ assert.equal(profileCityReturnPath([{slug:'../admin',cities:regions[0].cities}],['public']),'/#gallery');
+ assert.match(read('components/ProfileReturnLink.tsx'),/\(\) => defaultPath/);
+ assert.match(read('app/profiles/[id]/page.tsx'),/cityPath=\{cityPath\}/);
+});
 test('PostgREST 416 out-of-bounds becomes an empty page, not a database outage',()=>{
  const response={status:416,error:{code:'PGRST103',message:'Requested range not satisfiable'}};
  assert.equal(isCityPageOutOfRange(response.error,239976),true);

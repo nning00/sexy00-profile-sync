@@ -8,7 +8,7 @@ import OptimizedMediaImage from "@/components/OptimizedMediaImage";
 import ProfileGallery from "@/components/ProfileGallery";
 import RegionNav from "@/components/RegionNav";
 import { profileExamples } from "@/data/profiles";
-import { getContentSettings, getPublishedProfile, getPublishedProfileSeoDuplicateCount, getRelatedProfiles, getSiteSettings, mediaUrl, profileCardPath } from "@/lib/cms";
+import { getContentSettings, getPublishedProfile, getPublishedProfileSeoDuplicateCount, getPublicRegions, getRelatedProfiles, getSiteSettings, mediaUrl, profileCardPath } from "@/lib/cms";
 import { hideProfileAgeText, parseProfileDetails, profileDetailKeys } from "@/lib/profile-details";
 import { toEnglishProfileSlug } from "@/lib/profile-slugs";
 import { completeOpenGraph } from "@/lib/seo-metadata";
@@ -17,6 +17,7 @@ import { absoluteUrl, breadcrumbStructuredData, imageStructuredData } from "@/li
 import { isIndexableProfile } from "@/lib/profile-indexing";
 import ProfileReturnLink from "@/components/ProfileReturnLink";
 import { readableProfileSeo } from "@/lib/readable-seo";
+import { profileCityReturnPath } from "@/lib/navigation";
 
 export const revalidate = 300;
 export const dynamicParams = true;
@@ -69,11 +70,13 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   if (englishSlug !== normalizedId && await getPublishedProfile(englishSlug)) permanentRedirect(`/profiles/${englishSlug}`);
   const profile = await findProfile(id);
   if (!profile) notFound();
-  const [content, settings, relatedProfiles] = await Promise.all([
+  const [content, settings, relatedProfiles, publicRegions] = await Promise.all([
     getContentSettings(),
     getSiteSettings(),
     "display_name" in profile ? getRelatedProfiles(profile.id, 8, profile.profile_cities?.map(item => item.city_id)) : Promise.resolve(profileExamples.filter((item) => item.id !== profile.id).slice(0, 8)),
+    getPublicRegions(),
   ]);
+  const cityPath = profileCityReturnPath(publicRegions, "display_name" in profile ? (profile.profile_cities ?? []).map(item => item.city_id) : []);
   const name = "display_name" in profile ? profile.display_name : profile.name;
   const details = "display_name" in profile
     ? parseProfileDetails(profile.introduction, profile.style ?? "", profile.interest ?? "")
@@ -118,7 +121,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
         <MobileMenu />
         <Link className="brand" href="/"><BrandMark /><span>{settings.brand.name}</span></Link>
         <div className="detail-header-actions">
-          <ProfileReturnLink className="detail-back-link" />
+          <ProfileReturnLink className="detail-back-link" cityPath={cityPath} />
           <a className="nav-cta detail-line-cta" href={settings.brand.line_url} target="_blank" rel="noopener noreferrer">{settings.navigation.line_cta}</a>
         </div>
       </header>
@@ -127,7 +130,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
         <ProfileGallery images={gallery} />
         <div className="profile-detail-copy">
           <div className="breadcrumbs"><Link href="/">首頁</Link><span>/</span><strong>{name}</strong></div>
-          <ProfileReturnLink className="profile-return-link" arrow />
+          <ProfileReturnLink className="profile-return-link" cityPath={cityPath} arrow />
           <p className="eyebrow">PROFILE</p>
           <h1>{name}</h1>
           <div className="profile-summary">
