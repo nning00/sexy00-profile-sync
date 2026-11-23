@@ -16,6 +16,15 @@ export function profileReturnPath(value: unknown): string {
 }
 
 export const PROFILE_RETURN_KEY = "sexy00:profile-return";
+export function profileCityReturnPath(regions: Array<{ slug: string; cities: Array<{ id: string; slug: string; published: boolean }> }>, cityIds: string[]) {
+  const ids = new Set(cityIds);
+  for (const region of regions) for (const city of region.cities) {
+    if (!city.published || !ids.has(city.id)) continue;
+    const path = profileReturnPath(`/regions/${region.slug}/${city.slug}`);
+    if (path !== "/#gallery") return path;
+  }
+  return "/#gallery";
+}
 export function savedProfileReturn(value: unknown, pathname: string, now = Date.now()) {
   if (typeof value !== "string") return "/#gallery";
   try {
