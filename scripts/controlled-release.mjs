@@ -17,8 +17,8 @@ const tag=e.GITHUB_SHA+'-'+e.GITHUB_RUN_ID;
 await controlledRelease({
  async validate(){
   const head=execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();if(head!==e.GITHUB_SHA)throw Error('CHECKOUT_SHA_MISMATCH');
-  // Independently reviewed same-current-version CLI verification, Taiwan 2026-11-20; health passed.
-  if(e.EXPECTED_PREVIOUS_VERSION!=='1096b17e-7307-4596-a2ec-ee74efe53ab1'||e.EXPECTED_PREVIOUS_DEPLOYMENT!=='aa12bb5a-0ec1-445f-96e8-9e9fe440d468')throw Error('UNVERIFIED_ROLLBACK_BASELINE');
+  // Independently reviewed same-current-version verification, run 45137852744, 2026-11-23; health passed.
+  if(e.EXPECTED_PREVIOUS_VERSION!=='87e87943-95ba-4750-8613-b374ac05c11a'||e.EXPECTED_PREVIOUS_DEPLOYMENT!=='c7f95f2c-6a00-43e5-9a05-ff07992a419b')throw Error('UNVERIFIED_ROLLBACK_BASELINE');
   const own=JSON.parse(readFileSync('package.json','utf8'));if(own.devDependencies.wrangler!=='4.92.0')throw Error('WRANGLER_VERSION_DRIFT');
   const target=JSON.parse(readFileSync(config,'utf8'));if(target.name!=='sexy00-site'||target.keep_vars!==true)throw Error('WRONG_WORKER_OR_VARIABLE_RETENTION');
   const history=await gh('actions/workflows/deploy-worker.yml/runs?per_page=100');previousReleaseGate(history.workflow_runs,e.GITHUB_RUN_ID);

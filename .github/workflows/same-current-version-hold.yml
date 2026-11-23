@@ -13,9 +13,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   same-version:
-    # Owner approved 2026-11-23; exact version AND prior deployment are pinned.
-    # One POST only; a new dispatch after success fails the prior-deployment gate.
-    if: github.repository == 'nning00/sexy00-profile-sync' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.approved_operation == 'sexy00-same-current-version-once' && github.run_attempt == 1
+    # Approved one-time verification completed in run 45137852744. Restore HOLD.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
