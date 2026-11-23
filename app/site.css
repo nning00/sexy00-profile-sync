@@ -3317,3 +3317,10 @@ html { scroll-padding-block-start: var(--ui-anchor-offset); }
 }
 
 
+/* Crawlable city pagination keeps existing palette and 44px touch targets. */
+.city-pagination { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-block: 28px; }
+.city-page-item { display: inline-flex; align-items: center; gap: 8px; }
+.city-pagination a { display: inline-flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; padding: 8px 12px; border: 1px solid #963b63; border-radius: 10px; color: #963b63; text-decoration: none; }
+.city-pagination a[aria-current="page"] { color: #fff; background: #963b63; }
+.city-pagination a:hover { background: #dff2e8; color: #264e56; }
+.city-page-status, .city-empty { text-align: center; color: #47616a; }

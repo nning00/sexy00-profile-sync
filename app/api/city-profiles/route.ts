@@ -6,9 +6,11 @@ const SLUG_PATTERN = /^[a-z0-9-]+$/;
 export async function GET(request: NextRequest) {
   const region = request.nextUrl.searchParams.get("region")?.trim() ?? "";
   const city = request.nextUrl.searchParams.get("city")?.trim() ?? "";
-  const offset = Number.parseInt(request.nextUrl.searchParams.get("offset") ?? "0", 10);
-  const limit = Number.parseInt(request.nextUrl.searchParams.get("limit") ?? "24", 10);
-  if (!SLUG_PATTERN.test(region) || !SLUG_PATTERN.test(city) || !Number.isFinite(offset) || !Number.isFinite(limit)) {
+  const rawOffset = request.nextUrl.searchParams.get("offset") ?? "0";
+  const rawLimit = request.nextUrl.searchParams.get("limit") ?? "24";
+  const offset = Number(rawOffset);
+  const limit = Number(rawLimit);
+  if (!SLUG_PATTERN.test(region) || !SLUG_PATTERN.test(city) || !/^(0|[1-9]\d{0,5})$/.test(rawOffset) || !/^[1-9]\d?$/.test(rawLimit) || offset > 239976 || limit > 48) {
     return NextResponse.json({ error: "invalid-request" }, { status: 400 });
   }
 

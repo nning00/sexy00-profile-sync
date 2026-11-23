@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-type Metrics = { started: number; calls: number; duplicateCalls: number; databaseMs: number; seen: Set<string>; reads: Map<string, Promise<unknown>> };
+type Metrics = { started: number; calls: number; duplicateCalls: number; databaseMs: number; maxDatabaseMs: number; seen: Set<string>; reads: Map<string, Promise<unknown>> };
 const requests = new AsyncLocalStorage<Metrics>();
 
 // Coalesce concurrent cold-cache reads within one public GET only. Unlike a
@@ -30,15 +30,15 @@ export async function measurePublicFetch(input: RequestInfo | URL, init?: Reques
     metrics.seen.add(key);
   }
   try { return await fetch(input, init); }
-  finally { if (metrics) metrics.databaseMs += performance.now() - started; }
+  finally { if (metrics) { const duration = performance.now() - started; metrics.databaseMs += duration; metrics.maxDatabaseMs = Math.max(metrics.maxDatabaseMs, duration); } }
 }
 
 export async function withRequestPerformance(run: () => Promise<Response>): Promise<Response> {
-  const metrics: Metrics = { started: performance.now(), calls: 0, duplicateCalls: 0, databaseMs: 0, seen: new Set(), reads: new Map() };
+  const metrics: Metrics = { started: performance.now(), calls: 0, duplicateCalls: 0, databaseMs: 0, maxDatabaseMs: 0, seen: new Set(), reads: new Map() };
   return requests.run(metrics, async () => {
     const response = await run();
     const headers = new Headers(response.headers);
-    headers.append("Server-Timing", `app;dur=${(performance.now() - metrics.started).toFixed(1)}, db;dur=${metrics.databaseMs.toFixed(1)}, db_calls;desc="${metrics.calls}", db_duplicates;desc="${metrics.duplicateCalls}"`);
+    headers.append("Server-Timing", `app;dur=${(performance.now() - metrics.started).toFixed(1)}, db;dur=${metrics.databaseMs.toFixed(1)}, db_max;dur=${metrics.maxDatabaseMs.toFixed(1)}, db_calls;desc="${metrics.calls}", db_duplicates;desc="${metrics.duplicateCalls}"`);
     return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
   });
 }

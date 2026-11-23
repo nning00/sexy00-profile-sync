@@ -16,6 +16,7 @@ import JsonLd from "@/components/JsonLd";
 import { absoluteUrl, breadcrumbStructuredData, imageStructuredData } from "@/lib/structured-data";
 import { isIndexableProfile } from "@/lib/profile-indexing";
 import ProfileReturnLink from "@/components/ProfileReturnLink";
+import { readableProfileSeo } from "@/lib/readable-seo";
 
 export const revalidate = 300;
 export const dynamicParams = true;
@@ -38,13 +39,14 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const image = "card_image_path" in profile ? mediaUrl(profileCardPath(profile)) : profile.image;
   const storedTitle = hideProfileAgeText(("seo_title" in profile && profile.seo_title) || "") || `${name}｜成人形象介紹`;
   const storedDescription = hideProfileAgeText(("seo_description" in profile && profile.seo_description) || "") || "形象資訊、照片介紹與聯絡前須知。";
-  const description = storedDescription.includes(name) ? storedDescription : `${name}：${storedDescription}`;
+  const seo = readableProfileSeo(name, storedTitle, storedDescription.includes(name) ? storedDescription : `${name}：${storedDescription}`, "slug" in profile ? profile.slug : profile.id);
+  const description = seo.description;
   const duplicateCount = "display_name" in profile && isIndexableProfile(profile)
     ? await getPublishedProfileSeoDuplicateCount(profile.seo_title ?? "", profile.seo_description ?? "")
     : 0;
   const indexable = "display_name" in profile ? isIndexableProfile(profile) && duplicateCount <= 1 : true;
   return {
-    title: storedTitle.includes(settings.brand.name) ? { absolute: storedTitle } : storedTitle,
+    title: seo.title.includes(settings.brand.name) ? { absolute: seo.title } : seo.title,
     description,
     robots: indexable ? { index: true, follow: true } : { index: false, follow: true },
     alternates: { canonical: `/profiles/${"slug" in profile ? profile.slug : profile.id}` },
@@ -70,7 +72,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ id: st
   const [content, settings, relatedProfiles] = await Promise.all([
     getContentSettings(),
     getSiteSettings(),
-    "display_name" in profile ? getRelatedProfiles(profile.id, 8) : Promise.resolve(profileExamples.filter((item) => item.id !== profile.id).slice(0, 8)),
+    "display_name" in profile ? getRelatedProfiles(profile.id, 8, profile.profile_cities?.map(item => item.city_id)) : Promise.resolve(profileExamples.filter((item) => item.id !== profile.id).slice(0, 8)),
   ]);
   const name = "display_name" in profile ? profile.display_name : profile.name;
   const details = "display_name" in profile
