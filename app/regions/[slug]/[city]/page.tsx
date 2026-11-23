@@ -2,11 +2,10 @@ import type { Metadata } from "next";
 import BrandMark from "@/components/BrandMark";
 import Link from "next/link";
 import { publicCache } from "@/lib/public-cache";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import AgeGate from "@/components/AgeGate";
 import RegionNav from "@/components/RegionNav";
 import MobileMenu from "@/components/MobileMenu";
-import { profileExamples } from "@/data/profiles";
 import { getContentSettings, getPublishedArticleCards, getPublishedProfilePageForCity, getSiteSettings, mediaUrl, profileCardPath } from "@/lib/cms";
 import { createPublicClient } from "@/lib/supabase/public";
 import { completeOpenGraph } from "@/lib/seo-metadata";
@@ -15,6 +14,8 @@ import { absoluteUrl, breadcrumbStructuredData, imageStructuredData } from "@/li
 import CityProfileGrid, { type CityProfileCard } from "@/components/CityProfileGrid";
 import { getCityFaqs, getCitySeoContent } from "@/data/city-seo-content";
 import { seoGuides } from "@/data/seo-guides";
+import CityPagination from "@/components/CityPagination";
+import { CITY_PAGE_SIZE, cityPageHref, cityPageNumber } from "@/lib/city-pagination";
 
 const withCity = (text: string, city: string) => text.replace(/\{city\}/g, city);
 export const revalidate = 300;
@@ -43,54 +44,65 @@ const getLocation = publicCache(async (regionSlug: string, citySlug: string) => 
   return { region: undefined, city: undefined };
 }, ["public-location"], { revalidate: 300, tags: ["regions"] });
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string; city: string }> }): Promise<Metadata> {
+type CityPageProps = { params: Promise<{ slug: string; city: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
+
+export async function generateMetadata({ params, searchParams }: CityPageProps): Promise<Metadata> {
   const { slug, city: citySlug } = await params;
+  const page = cityPageNumber((await searchParams).page);
+  if (page === null) return { robots: { index: false, follow: true } };
   const [location, settings] = await Promise.all([getLocation(slug, citySlug), getSiteSettings()]);
   if (!location.region || !location.city) return {};
+  const url = cityPageHref(`/regions/${slug}/${citySlug}`, page);
+  const title = page > 1 ? `${location.city.name}公開形象列表｜第 ${page} 頁` : location.city.seo_title || `${location.city.name}成人形象介紹與預約諮詢`;
+  const baseDescription = location.city.seo_description || `${location.city.name}地區的成人形象展示與合法預約諮詢資訊。重視隱私、成年限定、清楚溝通與雙方同意。`;
+  const description = page > 1 ? `${location.city.name}公開形象列表第 ${page} 頁。${baseDescription}` : baseDescription;
   return {
-    title: location.city.seo_title || `${location.city.name}成人形象介紹與預約諮詢`,
-    description: location.city.seo_description || `${location.city.name}地區的成人形象展示與合法預約諮詢資訊。重視隱私、成年限定、清楚溝通與雙方同意。`,
-    alternates: { canonical: `/regions/${slug}/${citySlug}` },
+    title,
+    description,
+    alternates: { canonical: url },
     openGraph: completeOpenGraph({
-      url: `/regions/${slug}/${citySlug}`,
+      url,
       siteName: settings.brand.name,
-      title: location.city.seo_title || `${location.city.name}成人形象介紹與預約諮詢`,
-      description: location.city.seo_description || `${location.city.name}成人形象展示與合法預約諮詢。`,
+      title,
+      description,
       image: location.region.image,
       imageAlt: `${location.city.name}地區形象照`,
     }),
   };
 }
 
-export default async function CityPage({ params }: { params: Promise<{ slug: string; city: string }> }) {
+export default async function CityPage({ params, searchParams }: CityPageProps) {
   const { slug, city: citySlug } = await params;
+  const search = await searchParams;
+  const page = cityPageNumber(search.page);
+  if (page === null) notFound();
   const [{ region, city }, profilePage, content, settings, allArticleCards] = await Promise.all([
     getLocation(slug, citySlug),
-    getPublishedProfilePageForCity(slug, citySlug, 0, 24),
+    getPublishedProfilePageForCity(slug, citySlug, (page - 1) * CITY_PAGE_SIZE, CITY_PAGE_SIZE),
     getContentSettings(),
     getSiteSettings(),
     getPublishedArticleCards(),
   ]);
   if (!region || !city) notFound();
+  const cityUrl = `/regions/${region.slug}/${city.slug}`;
+  if (search.page === "1") permanentRedirect(cityUrl);
+  if (page > 1 && (page > Math.ceil(profilePage.total / CITY_PAGE_SIZE) || !profilePage.profiles.length)) notFound();
   const publishedArticles = allArticleCards.slice(0, 4);
-  const displayedProfiles = profilePage.profiles.length ? profilePage.profiles : profileExamples;
-  const profileTotal = profilePage.profiles.length ? profilePage.total : profileExamples.length;
+  const displayedProfiles = profilePage.profiles;
+  const profileTotal = profilePage.total;
   const profileCards: CityProfileCard[] = displayedProfiles.map((profile) => {
-    const isCms = "display_name" in profile;
-    const name = isCms ? profile.display_name : profile.name;
-    const image = isCms ? mediaUrl(profileCardPath(profile)) : profile.image;
-    const firstImageAlt = isCms
-      ? [...(profile.profile_images ?? [])].sort((a, b) => a.sort_order - b.sort_order)[0]?.alt_text
-      : null;
+    const name = profile.display_name;
+    const image = mediaUrl(profileCardPath(profile));
+    const firstImageAlt = [...(profile.profile_images ?? [])].sort((a, b) => a.sort_order - b.sort_order)[0]?.alt_text;
     return {
       id: profile.id,
-      slug: isCms ? profile.slug : profile.id,
+      slug: profile.slug,
       name,
       image,
       imageAlt: firstImageAlt || `${name}合法形象展示照片`,
     };
   });
-  const cityUrl = `/regions/${region.slug}/${city.slug}`;
+  const pageUrl = cityPageHref(cityUrl, page);
   const localContent = getCitySeoContent(city.slug, city.name);
   const cityFaqs = getCityFaqs(city.name, city.faqs);
   const cityStructuredData = {
@@ -103,20 +115,19 @@ export default async function CityPage({ params }: { params: Promise<{ slug: str
       ]),
       {
         "@type": "ItemList",
-        "@id": `${absoluteUrl(cityUrl)}#profiles`,
+        "@id": `${absoluteUrl(pageUrl)}#profiles`,
         name: `${city.name}形象介紹`,
-        numberOfItems: profileTotal,
+        numberOfItems: displayedProfiles.length,
         // Only describe the cards initially visible on the page. Including
         // hundreds of hidden load-more cards creates a very large HTML/JSON-LD
         // response and can exhaust a small Cloudflare Worker.
-        itemListElement: displayedProfiles.slice(0, 24).map((profile, index) => {
-          const isCms = "display_name" in profile;
-          const name = isCms ? profile.display_name : profile.name;
-          const image = isCms ? mediaUrl(profileCardPath(profile)) : profile.image;
-          const profileSlug = isCms ? profile.slug : profile.id;
+        itemListElement: displayedProfiles.map((profile, index) => {
+          const name = profile.display_name;
+          const image = mediaUrl(profileCardPath(profile));
+          const profileSlug = profile.slug;
           return {
             "@type": "ListItem",
-            position: index + 1,
+            position: (page - 1) * CITY_PAGE_SIZE + index + 1,
             url: absoluteUrl(`/profiles/${profileSlug}`),
             name,
             image: imageStructuredData(image, `${name}形象照片`),
@@ -152,12 +163,14 @@ export default async function CityPage({ params }: { params: Promise<{ slug: str
       <section className="profile-section section" id="main-content" tabIndex={-1}>
         <div className="section-heading">
           <div className="article-breadcrumbs"><Link href="/">首頁</Link><span>/</span><Link href={`/regions/${region.slug}`}>{region.name}</Link><span>/</span><strong>{city.name}</strong></div>
-          <h1>{city.page_title || `${city.name}地區精選資訊`}</h1>
+          <h1>{city.page_title || `${city.name}地區精選資訊`}{page > 1 && `｜第 ${page} 頁`}</h1>
           <p>{city.gallery_description || `瀏覽${city.name}地區的成人形象介紹與公開資訊；實際內容與可安排情況，請透過正式聯絡方式確認。`}</p>
           <p className="city-profile-count">目前共整理 {profileTotal} 筆公開形象資訊；頁面數量不代表即時可安排。</p>
         </div>
         <div className="city-gallery-heading"><h2>{city.gallery_title || `${city.name}${content.labels.city_gallery_heading_suffix}`}</h2></div>
-        <CityProfileGrid profiles={profileCards} total={profileTotal} regionSlug={slug} citySlug={citySlug} />
+        {profileCards.length ? <CityProfileGrid profiles={profileCards} regionSlug={slug} citySlug={citySlug} page={page} /> : <p className="city-empty">目前此地區尚無公開形象資料，請稍後再查看。</p>}
+        <p className="city-page-status">第 {page}／{Math.max(1, Math.ceil(profileTotal / CITY_PAGE_SIZE))} 頁</p>
+        <CityPagination base={cityUrl} page={page} totalPages={Math.ceil(profileTotal / CITY_PAGE_SIZE)} />
       </section>
 
       <section className="city-seo section">

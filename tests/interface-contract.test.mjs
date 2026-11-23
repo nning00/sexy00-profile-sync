@@ -58,10 +58,11 @@ test("profile return context only accepts local city directories", () => {
   for (const value of [undefined, ["/regions/north/taipei"], "//evil.test", "https://evil.test", "javascript:alert(1)", "/regions/../admin", "/admin", "/regions/north/taipei?next=//evil.test", "/regions/north/taipei%0a"]) {
     assert.equal(profileReturnPath(value), "/#gallery");
   }
-  assert.match(read("components/CityProfileGrid.tsx"), /\?from=\$\{encodeURIComponent/);
+  assert.match(read("components/CityProfileGrid.tsx"), /href=\{`\/profiles\/\$\{profile.slug\}`\}/);
   assert.match(read("app/profiles/[id]/page.tsx"), /<ProfileReturnLink/);
   assert.doesNotMatch(read("app/profiles/[id]/page.tsx"), /searchParams/);
   assert.match(read("components/ProfileReturnLink.tsx"), /profileReturnPath\(from.length === 1 \? from\[0\] : undefined\)/);
+  assert.match(read("components/ProfileReturnLink.tsx"), /savedProfileReturn/);
 });
 
 test("skip destination is unique and follows public navigation", () => {

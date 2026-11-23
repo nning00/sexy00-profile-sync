@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import Link from "next/link";
-import { profileReturnPath } from "@/lib/navigation";
+import { PROFILE_RETURN_KEY, profileReturnPath, savedProfileReturn } from "@/lib/navigation";
 
 const fallbackPath = "/#gallery";
 const subscribe = (callback: () => void) => {
@@ -12,7 +12,8 @@ const subscribe = (callback: () => void) => {
 const getServerPath = () => fallbackPath;
 const getClientPath = () => {
   const from = new URLSearchParams(window.location.search).getAll("from");
-  return profileReturnPath(from.length === 1 ? from[0] : undefined);
+  if (from.length) return profileReturnPath(from.length === 1 ? from[0] : undefined);
+  try { return savedProfileReturn(sessionStorage.getItem(PROFILE_RETURN_KEY), window.location.pathname); } catch { return fallbackPath; }
 };
 
 // Navigation context is browser-only so it cannot change the cached profile HTML.

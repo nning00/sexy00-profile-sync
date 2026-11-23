@@ -1,12 +1,14 @@
 import { publicCache } from "@/lib/public-cache";
 import { createPublicClient } from "@/lib/supabase/public";
 import { normalizeImagePosition } from "@/lib/image-position";
+import { isCityPageOutOfRange } from "@/lib/city-pagination";
 
 export type CmsProfile = {
   id: string; slug: string; display_name: string; style: string | null; interest: string | null;
   introduction: string | null; card_image_path: string | null; seo_title: string | null;
   seo_description: string | null; updated_at: string;
   profile_images?: Array<{ storage_path: string; alt_text: string | null; sort_order: number }>;
+  profile_cities?: Array<{ city_id: string }>;
 };
 
 export type CmsProfileIndex = Pick<CmsProfile, "id" | "slug" | "display_name" | "introduction" | "card_image_path" | "seo_title" | "seo_description" | "updated_at" | "profile_images">;
@@ -84,19 +86,22 @@ async function getPublishedProfilesForCityUncached(regionSlug: string, citySlug:
 
 async function getPublishedProfilePageForCityUncached(regionSlug: string, citySlug: string, offset = 0, limit = 24) {
   const supabase = createPublicClient();
-  const safeOffset = Math.max(0, Math.floor(offset));
-  const safeLimit = Math.min(48, Math.max(1, Math.floor(limit)));
+  const safeOffset = Number.isFinite(offset) ? Math.min(239976, Math.max(0, Math.floor(offset))) : 0;
+  const safeLimit = Number.isFinite(limit) ? Math.min(48, Math.max(1, Math.floor(limit))) : 24;
   const region = (await getPublicRegions()).find((item) => item.slug === regionSlug);
   if (!region) return { profiles: [] as CmsProfile[], total: 0 };
   const city = region.cities.find((item) => item.slug === citySlug && item.published);
   if (!city) return { profiles: [] as CmsProfile[], total: 0 };
   const { data, error, count } = await supabase.from("profile_cities")
-    .select("profiles!inner(id,slug,display_name,style,interest,introduction,card_image_path,seo_title,seo_description,updated_at,sort_order,status)", { count: "exact" })
+    .select("profile_id,profiles!inner(id,slug,display_name,card_image_path,sort_order,status,created_at)", { count: "exact" })
     .eq("city_id", city.id)
     .eq("profiles.status", "published")
-    .order("sort_order", { referencedTable: "profiles" })
+    .order("profiles(sort_order)")
+    .order("profiles(created_at)", { ascending: false })
+    .order("profile_id")
     .range(safeOffset, safeOffset + safeLimit - 1);
-  if (error) return { profiles: [] as CmsProfile[], total: 0 };
+  if (isCityPageOutOfRange(error, safeOffset)) return { profiles: [] as CmsProfile[], total: 0 };
+  if (error) throw error;
   const profiles = (data ?? []).map((row) => row.profiles as unknown as CmsProfile);
   return { profiles, total: count ?? profiles.length };
 }
@@ -104,9 +109,10 @@ async function getPublishedProfilePageForCityUncached(regionSlug: string, citySl
 async function getPublishedProfileUncached(slug: string) {
   const supabase = createPublicClient();
   const { data, error } = await supabase.from("profiles")
-    .select("id,slug,display_name,style,interest,introduction,card_image_path,seo_title,seo_description,updated_at,profile_images(storage_path,alt_text,sort_order)")
+    .select("id,slug,display_name,style,interest,introduction,card_image_path,seo_title,seo_description,updated_at,profile_images(storage_path,alt_text,sort_order),profile_cities(city_id)")
     .eq("slug", slug).eq("status", "published").maybeSingle();
-  if (error || !data) return null;
+  if (error) throw error;
+  if (!data) return null;
   const profile = data as CmsProfile;
   profile.profile_images = [...(profile.profile_images ?? [])].sort((a, b) => a.sort_order - b.sort_order);
   return profile;
@@ -122,14 +128,18 @@ async function getPublishedProfileSeoDuplicateCountUncached(seoTitle: string, se
   return error ? 1 : count ?? 0;
 }
 
-async function getRelatedProfilesUncached(profileId: string, limit = 8) {
+async function getRelatedProfilesUncached(profileId: string, limit = 8, knownCityIds?: string[]) {
   const supabase = createPublicClient();
-  const { data: assignments, error: assignmentError } = await supabase.from("profile_cities")
-    .select("city_id").eq("profile_id", profileId);
-  const cityIds = [...new Set((assignments ?? []).map((item) => item.city_id))];
-  if (assignmentError || !cityIds.length) return [] as CmsProfile[];
+  let cityIds = knownCityIds;
+  if (!cityIds) {
+    const { data: assignments, error } = await supabase.from("profile_cities").select("city_id").eq("profile_id", profileId);
+    if (error) throw error;
+    cityIds = (assignments ?? []).map(item => item.city_id);
+  }
+  cityIds = [...new Set(cityIds)];
+  if (!cityIds.length) return [] as CmsProfile[];
   const { data, error } = await supabase.from("profile_cities")
-    .select("profiles!inner(id,slug,display_name,style,interest,introduction,card_image_path,seo_title,seo_description,updated_at,sort_order,status)")
+    .select("profiles!inner(id,slug,display_name,card_image_path,sort_order,status)")
     .in("city_id", cityIds).neq("profile_id", profileId).eq("profiles.status", "published")
     .limit(Math.max(limit * 2, limit));
   if (error) return [] as CmsProfile[];
@@ -172,11 +182,12 @@ async function getPublishedArticleCardsUncached() {
 }
 
 async function getPublicRegionsUncached() {
-  const { data } = await createPublicClient()
+  const { data, error } = await createPublicClient()
     .from("regions")
     .select("id,slug,name,sort_order,cities(id,slug,name,sort_order,published)")
     .eq("published", true)
     .order("sort_order");
+  if (error) throw error;
   return data ?? [];
 }
 
@@ -267,7 +278,8 @@ export async function getContentSettingsUncached(existingRows?: SiteSettingRow[]
 }
 
 async function getPublicSettingsBundleUncached() {
-  const { data } = await createPublicClient().from("site_settings").select("key,value");
+  const { data, error } = await createPublicClient().from("site_settings").select("key,value");
+  if (error) throw error;
   const rows = (data ?? []) as SiteSettingRow[];
   const [settings, content] = await Promise.all([
     getSiteSettingsUncached(rows),
@@ -281,8 +293,8 @@ const getPublicSettingsBundle = publicCache(getPublicSettingsBundleUncached, ["p
 
 export const getPublishedProfiles = publicCache(getPublishedProfilesUncached, ["published-profiles"], { ...cacheOptions, tags: ["profiles"] });
 export const getPublishedProfilesForCity = publicCache(getPublishedProfilesForCityUncached, ["published-profiles-city"], { ...cacheOptions, tags: ["profiles", "regions"] });
-export const getPublishedProfilePageForCity = publicCache(getPublishedProfilePageForCityUncached, ["published-profile-page-city"], { ...cacheOptions, tags: ["profiles", "regions"] });
-export const getPublishedProfile = publicCache(getPublishedProfileUncached, ["published-profile"], { ...cacheOptions, tags: ["profiles"] });
+export const getPublishedProfilePageForCity = publicCache(getPublishedProfilePageForCityUncached, ["published-profile-page-city-v2"], { ...cacheOptions, tags: ["profiles", "regions"] });
+export const getPublishedProfile = publicCache(getPublishedProfileUncached, ["published-profile-v2"], { ...cacheOptions, tags: ["profiles"] });
 export const getPublishedProfileSeoDuplicateCount = publicCache(getPublishedProfileSeoDuplicateCountUncached, ["published-profile-seo-duplicate-count"], { ...cacheOptions, tags: ["profiles"] });
 export const getRelatedProfiles = publicCache(getRelatedProfilesUncached, ["related-profiles"], { ...cacheOptions, tags: ["profiles", "regions"] });
 export const getPublishedArticles = publicCache(getPublishedArticlesUncached, ["published-articles"], { ...cacheOptions, tags: ["articles"] });

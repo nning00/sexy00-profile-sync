@@ -15,6 +15,7 @@ test('timing exposes aggregate durations, never database URLs or credentials', a
     const timing = response.headers.get('server-timing');
     assert.match(timing, /db_calls;desc="2"/);
     assert.match(timing, /db_duplicates;desc="1"/);
+    assert.match(timing, /db_max;dur=\d+(?:\.\d+)?/);
     assert.doesNotMatch(timing, /secret|hidden|example|site_settings/);
     assert.equal(await response.text(), 'html');
   } finally { globalThis.fetch = original; }
