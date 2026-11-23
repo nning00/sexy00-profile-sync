@@ -10,6 +10,7 @@ import { assertCleanupTarget, collectUnusedProfileMedia, safeProfileMediaPath } 
 import { sourcePhotoState, hasProfilePhotos, photoImportStagingStatus } from "@/lib/profile-photo-policy";
 import { adultIdentityBinding, continueExistingApproval, manualReceiptCanContinue, matchingManualEvidence, needsManualEvidenceRecheck, receiptMatches, syncAdultReview, sourceAge, type AdultReceipt } from "@/lib/adult-receipt-policy";
 import { backfillAdultReceipts } from "@/lib/adult-receipts";
+import { buildProfileSyncSeo } from "@/lib/profile-sync-seo";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -87,25 +88,6 @@ function isAuthorized(request: Request) {
 
 function clean(value: unknown, max = 2000) {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
-}
-
-function publicDetail(value: unknown, max = 100) {
-  const normalized = clean(value, max)
-    .replace(/&#(?:45|8211|8212);?/gi, "-")
-    .replace(/&(?:ndash|mdash);?/gi, "-")
-    .trim();
-  if (!normalized || /^(?:\?|[-�V�X]+|n\/?a|null|undefined|unknown|����|����|����|\{[^}]+\})$/i.test(normalized)) return "";
-  return normalized;
-}
-
-function heightLabel(value: unknown) {
-  const height = publicDetail(value, 30);
-  return height && /^\d{3}$/.test(height) ? `${height}����` : height;
-}
-
-function cupLabel(value: unknown) {
-  const cup = publicDetail(value, 30);
-  return cup && !/�n�M$/i.test(cup) ? `${cup}�n�M` : cup;
 }
 
 function validSourceUrl(value: string) {
@@ -218,7 +200,7 @@ async function syncImages(profileId: string, displayName: string, images: Source
       profile_id: profileId,
       source_url: image.url,
       storage_path: storagePath,
-      alt_text: image.alt || `${displayName}�ζH�Ӥ� ${index + 1}`,
+      alt_text: image.alt || `${displayName}\u5f62\u8c61\u7167\u7247 ${index + 1}`,
       sort_order: index + 1,
     });
     if (trackError) throw trackError;
@@ -231,7 +213,7 @@ async function syncImages(profileId: string, displayName: string, images: Source
   if (latestError) throw latestError;
   const ordered = images.flatMap((image, index) => {
     const row = latestTracked?.find((candidate) => candidate.source_url === image.url);
-    return row ? [{ ...row, alt_text: image.alt || `${displayName}�ζH�Ӥ� ${index + 1}`, sort_order: index + 1 }] : [];
+    return row ? [{ ...row, alt_text: image.alt || `${displayName}\u5f62\u8c61\u7167\u7247 ${index + 1}`, sort_order: index + 1 }] : [];
   });
 
   const { data: previousImageRows, error: previousImageRowsError } = previousStoragePaths.length
@@ -492,16 +474,7 @@ export async function POST(request: Request) {
         result.unchanged += 1;
         continue;
       }
-      const serviceMethod = publicDetail(profile.details.serviceMethod, 60) || "���H�ζH";
-      const titleTraits = [
-        publicDetail(profile.details.serviceArea, 60),
-        heightLabel(profile.details.height),
-        cupLabel(profile.details.cup),
-        publicDetail(profile.details.price, 60),
-      ].filter(Boolean);
-      const descriptionTraits = [heightLabel(profile.details.height), cupLabel(profile.details.cup), publicDetail(profile.details.price, 60)].filter(Boolean);
-      const seoTitle = `${profile.cityName}${serviceMethod}�U${profile.displayName}${titleTraits.length ? `�U${titleTraits.join("?")}` : ""}`;
-      const seoDescription = `${profile.cityName}${serviceMethod}��T�U${profile.displayName}${descriptionTraits.length ? `�A${descriptionTraits.join("�B")}` : ""}�C�d�ݤ��}�Ӥ��B�A�Ȧa�ϻP�p���e�����C`;
+      const { seoTitle, seoDescription } = buildProfileSyncSeo(profile.cityName, profile.displayName, profile.details);
       const payload = {
         slug: current?.slug || `source-${profile.sourceKey}`,
         display_name: profile.displayName,

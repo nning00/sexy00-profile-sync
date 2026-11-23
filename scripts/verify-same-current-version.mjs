@@ -1,5 +1,6 @@
 import {pathToFileURL} from 'node:url';
-export const EXPECTED_VERSION='497a639b-c263-49b4-a240-5313284bb58f';
+export const EXPECTED_VERSION='87e87943-95ba-4750-8613-b374ac05c11a';
+export const EXPECTED_DEPLOYMENT='eabd0071-a3a4-41af-b8d7-8bbfc501c1eb';
 export async function verifySameVersion({account,token,approval,repository,attempt,fetchImpl=fetch}){
  if(approval!=='sexy00-same-current-version-once'||repository!=='nning00/sexy00-profile-sync'||String(attempt)!=='1')throw Error('Explicit single-attempt authorization missing');
  if(!/^[a-f0-9]{32}$/.test(account||'')||!token)throw Error('Existing sexy00 credentials missing');
@@ -20,6 +21,7 @@ export async function verifySameVersion({account,token,approval,repository,attem
   if(!r.ok||d.ok!==true||d.database!=='connected')throw Error('Health check failed');
  }
  const before=await read();
+ if(before.id!==EXPECTED_DEPLOYMENT)throw Error('Baseline deployment changed or already verified; no automatic operation allowed');
  await health();
  // Recheck immediately before mutation, never force a newer deployment back.
  const immediate=await read();
