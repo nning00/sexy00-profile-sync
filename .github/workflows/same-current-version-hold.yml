@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   same-version:
-    # Approved one-time verification completed in run 45137852744. Restore HOLD.
-    if: ${{ false }}
+    # Exact current-version verification only; restore HOLD after one success.
+    if: github.repository == 'nning00/sexy00-profile-sync' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.approved_operation == 'sexy00-same-current-version-once' && github.run_attempt == 1
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
