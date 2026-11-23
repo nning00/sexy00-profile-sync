@@ -2,15 +2,24 @@ const clean = (value: string) => value.replace(/\s+/g, " ").trim();
 export function seoWidth(value: string) { return Array.from(value).reduce((sum, char) => sum + (/[^\x00-\xff]/.test(char) ? 2 : 1), 0); }
 function boundedText(value: string, max: number) {
   const chars = Array.from(clean(value));
-  if (chars.length <= max) return chars.join("");
-  const prefix = chars.slice(0, max - 1).join("");
+  if (chars.length <= max && seoWidth(chars.join("")) <= 190) return chars.join("");
+  const selected: string[] = [];
+  let width = 0;
+  for (const char of chars) {
+    const nextWidth = seoWidth(char);
+    if (selected.length >= max - 1 || width + nextWidth > 190 - seoWidth("…")) break;
+    selected.push(char); width += nextWidth;
+  }
+  const prefix = selected.join("");
   const boundary = Math.max(prefix.lastIndexOf("。"), prefix.lastIndexOf("；"), prefix.lastIndexOf("，"));
-  return boundary >= max * .65 ? prefix.slice(0, boundary + 1) : `${prefix}…`;
+  return boundary >= prefix.length * .65 ? prefix.slice(0, boundary + 1) : `${prefix}…`;
 }
 
 export function readableDescription(value: string, supplement: string) {
   const original = clean(value);
-  return boundedText(Array.from(original).length < 75 ? `${original}${supplement}` : original, 155);
+  // Chinese carries more information per character than English. Do not pad
+  // an adequate Chinese description just to satisfy an English character rule.
+  return boundedText(seoWidth(original) < 90 ? `${original}${supplement}` : original, 155);
 }
 
 // Presentation only: do not rewrite stored editor values or indexing eligibility.
@@ -27,6 +36,6 @@ export function readableProfileSeo(name: string, title: string, description: str
     if (reference) nextTitle += `｜資料編號 ${reference}`;
   }
   const nextDescription = readableDescription(description,
-    "本頁整理公開形象與照片資料，內容可能隨來源更新而調整，不代表即時可安排。聯絡前請再次核對資料與費用，並留意個資與付款安全；實際內容以目前公開資訊與正式回覆為準。");
+    "公開照片與地區資訊內容可能隨來源更新，不代表即時可安排。聯絡前請核對資料、費用，並留意個資與付款安全。");
   return { title: nextTitle, description: nextDescription };
 }
