@@ -6,8 +6,8 @@ const runner=readFileSync('scripts/edc-profile-sync.mjs','utf8');
 test('release adapter targets only the correct sexy00 repository and baseline',()=>{
  const adapter=readFileSync('scripts/controlled-release.mjs','utf8');
  assert.match(adapter,/repo='nning00\/sexy00-profile-sync'/);
- assert.match(adapter,/aa12bb5a-0ec1-445f-96e8-9e9fe440d468/);
- assert.match(adapter,/1096b17e-7307-4596-a2ec-ee74efe53ab1/);
+ assert.match(adapter,/c7f95f2c-6a00-43e5-9a05-ff07992a419b/);
+ assert.match(adapter,/87e87943-95ba-4750-8613-b374ac05c11a/);
  assert.match(adapter,/assertTriggerSecret\(JSON.parse\(wr\('versions','view'/);
  assert.match(adapter,/async updateTriggers\(\)\{await cron.assertExisting\(\);\}/);
  assert.doesNotMatch(adapter,/cron\.enable\(/);
