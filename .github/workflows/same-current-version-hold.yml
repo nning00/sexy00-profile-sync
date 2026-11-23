@@ -13,8 +13,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   same-version:
-    # INACTIVE: remove only after owner approval and independent review.
-    if: false
+    # Owner approved 2026-11-23; exact version AND prior deployment are pinned.
+    # One POST only; a new dispatch after success fails the prior-deployment gate.
+    if: github.repository == 'nning00/sexy00-profile-sync' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.approved_operation == 'sexy00-same-current-version-once' && github.run_attempt == 1
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
