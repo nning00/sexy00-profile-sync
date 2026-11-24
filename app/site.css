@@ -945,7 +945,7 @@ h2 { margin: 0; font-size: clamp(36px, 4vw, 58px); line-height: 1.4; letter-spac
   .admin-article-table > a > span:nth-child(2), .admin-article-table em { display: none; }
   .admin-article-group > summary { grid-template-columns: minmax(0, 1fr) 75px; }
   .admin-article-group > summary small { display: none; }
-  .article-site-header nav { display: none; }
+  .article-site-header nav { display: flex; }
   .article-center-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .site-header { height: 68px; }
   .detail-header { height: 68px; position: sticky; top: 0; z-index: 20; background: rgba(255,253,251,.96); backdrop-filter: blur(14px); }

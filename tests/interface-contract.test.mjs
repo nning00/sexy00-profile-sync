@@ -37,6 +37,16 @@ test("opening the mobile drawer focuses a non-editable control", () => {
   assert.match(source, /addEventListener\("resize", closeOnDesktop, \{ passive: true \}\);\s*focusClose\(\);/);
   assert.doesNotMatch(source, /searchRef|autoFocus/);
 });
+
+test("article headers retain the mobile LINE reservation entry", () => {
+  const header = read("components/SiteHeader.tsx");
+  const css = read("app/site.css");
+  assert.match(header, /className="site-header article-site-header"/);
+  assert.match(header, /className="nav-cta"/);
+  assert.match(css, /\.article-site-header nav \{ display: flex; \}/);
+  assert.doesNotMatch(css, /\.article-site-header nav \{ display: none; \}/);
+  assert.match(css, /\.site-header nav a:not\(\.nav-cta\) \{ display: none; \}/);
+});
 test("desktop navigation and categories expose keyboard and location state", () => {
   const source = read("components/RegionNavClient.tsx");
   for (const key of ["ArrowUp", "ArrowDown", "Home", "End", "Tab", "Escape"]) assert.ok(source.includes(`"${key}"`));
