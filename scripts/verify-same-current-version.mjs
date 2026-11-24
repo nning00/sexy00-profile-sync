@@ -1,6 +1,6 @@
 import {pathToFileURL} from 'node:url';
-export const EXPECTED_VERSION='efeca245-3851-4a4d-9e39-0ad8cc47f880';
-export const EXPECTED_DEPLOYMENT='8388a25c-1ceb-41d6-90a8-b8629bf4c299';
+export const EXPECTED_VERSION='21857060-041c-42f4-afbe-578e9d78be25';
+export const EXPECTED_DEPLOYMENT='b677cdd0-0de1-4d5a-a10b-9728819db913';
 export async function verifySameVersion({account,token,approval,repository,attempt,fetchImpl=fetch}){
  if(approval!=='sexy00-same-current-version-once'||repository!=='nning00/sexy00-profile-sync'||String(attempt)!=='1')throw Error('Explicit single-attempt authorization missing');
  if(!/^[a-f0-9]{32}$/.test(account||'')||!token)throw Error('Existing sexy00 credentials missing');
